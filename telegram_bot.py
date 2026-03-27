@@ -1,6 +1,6 @@
 import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CallbackQueryHandler, ContextTypes, CommandHandler
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger
 from local_storage import create_and_save_report
 
@@ -24,29 +24,28 @@ def escape_for_tg(text):
         return ""
     return html.escape(str(text))
 
-async def send_email_alert(application: Application, mail_data: dict, ai_result: dict):
+async def send_email_alert(application: Application, mail_data: dict, ai_result: dict, t_data: dict, base_subj: str):
     """
-    새로운 이메일이 오고 AI가 분석을 마쳤을 때, 
-    사용자의 텔레그램 방으로 '띠링!' 하고 예쁜 요약본을 배달해주는 우체부 로봇 함수입니다.
+    새로운 이메일이 오고 AI가 분석을 마쳤을 때 텔레그램으로 배달합니다.
+    이때 이전 대화 말풍선을 찾아서 시각적으로 답장(스레드) 형태로 완벽하게 연결합니다.
     """
-    # 저장 버튼(Inline Keyboard)에 달아둘 이메일 전용 주민등록번호(UID)를 가져옵니다.
     uid = mail_data.get('uid', '알수없는번호')
     
-    # 임시 상자에 원본 이메일 내용과 AI 분석 결과를 저장해 둡니다. 나중에 버튼이 눌렸을 때를 대비하는 겁니다.
     temp_mail_cache[uid] = {
         "mail": mail_data,
         "ai": ai_result
     }
+    
+    # 핑퐁 횟수가 몇 번째인지 사용자에게도 자랑스럽게 보여줍니다!
+    thread_badge = f"[핑퐁 {t_data['count']}회차]" if t_data['count'] > 1 else "[새로운 대화 시작]"
 
-    # 텔레그램 스마트폰 화면에 보일 예쁜 알림창의 내용을 빵빵하게 채워 넣습니다. (HTML 방식)
     message_text = (
-        f"📧 <b>새로운 이메일 알림 보드</b>\n\n"
+        f"📧 <b>{thread_badge} 이메일 알림</b>\n\n"
         f"🕒 <b>수신 일시:</b> {escape_for_tg(mail_data.get('date', ''))}\n"
         f"👤 <b>보낸 사람:</b> {escape_for_tg(mail_data.get('sender', ''))}\n"
         f"📝 <b>메일 제목:</b> {escape_for_tg(mail_data.get('subject', ''))}\n"
         f"🗂 <b>분류 결과:</b> {escape_for_tg(ai_result.get('category', ''))}\n\n"
-        f"💡 <b>전체 흐름 요약 및 팁:</b>\n{escape_for_tg(ai_result.get('summary', ''))}\n\n"
-        f"👨‍💼 <b>AI가 분석한 실무 조언:</b>\n{escape_for_tg(ai_result.get('advice', ''))}"
+        f"💡 <b>전체 흐름 요약:</b>\n{escape_for_tg(ai_result.get('summary', ''))}"
     )
 
     # 텔레그램 메신저는 욕심을 부려 한 번에 너무 많은 글씨(4096자)를 쑤셔 넣으면
@@ -65,25 +64,31 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
             if i == len(message_chunks) - 1:
                 # 사용자가 손가락으로 누르면 "save_<고유번호>" 라는 암호 신호를 봇에게 말없이 튕겨줍니다.
                 keyboard = [
-                    [InlineKeyboardButton("💾 이 내용 전체를 예쁜 워드 파일로 컴퓨터에 저장하기", callback_data=f"save_{uid}")]
+                    [InlineKeyboardButton("💾 이 내용 전체를 깨짐 없는 마크다운(.md) 문서로 저장하기", callback_data=f"save_{uid}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
-            await application.bot.send_message(
+            sent_msg = await application.bot.send_message(
                 chat_id=ALLOWED_CHAT_ID,
                 text=chunk,
                 parse_mode="HTML",
+                reply_to_message_id=t_data.get("msg_id") if i == 0 else None,
                 reply_markup=reply_markup
             )
             
-        logger.info(f"텔레그램 비서가 새로운 소식(메일번호 {uid})을 성공적으로 사용자에게 전달했습니다!")
+            # 첫 번째 조각이 성공적으로 배달되었으면, 이 새로운 말풍선 번호와 방금 만든 '요약본'을 장부에 저장합니다!
+            if i == 0:
+                from thread_manager import update_thread_data
+                update_thread_data(base_subj, msg_id=sent_msg.message_id, latest_summary=ai_result.get("summary", ""))
+            
+        logger.info(f"텔레그램 스레드(핑퐁) 알림이 성공적으로 연결되었습니다! (메일번호 {uid})")
     except Exception as e:
         logger.error(f"텔레그램 전력망 장애로 소식 전달에 슬프게도 실패했습니다: {e}")
 
 async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    사용자가 텔레그램 대화방에서 [워드 파일로 저장하기] 버튼을 띡! 눌렀을 때만 작동하는 '동작 감지기'입니다.
-    사용자의 명령(/save) 없이는 어떤 워드 파일도 제멋대로 생성하지 못하도록 통과 지점을 만든 방어벽입니다.
+    사용자가 텔레그램 대화방에서 [마크다운 문서로 저장하기] 버튼을 띡! 눌렀을 때만 작동하는 '동작 감지기'입니다.
+    사용자의 명백한 클릭 명령 없이는 어떤 문서 파일도 제멋대로 생성하지 못하도록 통과 지점을 만든 방어벽입니다.
     """
     query = update.callback_query
     
@@ -101,7 +106,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         cache_data = temp_mail_cache.get(uid)
         
         if cache_data:
-            # 드디어 우리가 앞서 만든 4단계 모듈 '워드 자동 생성기'를 가동합니다!
+            # 드디어 우리가 앞서 만든 4단계 모듈 '마크다운 자동 생성기'를 가동합니다!
             success, filepath = create_and_save_report(cache_data["mail"], cache_data["ai"])
             
             if success:
@@ -123,9 +128,14 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
                 text="⚠️ 해당 메일 내용이 컴퓨터의 단기 기억 용량에서 이미 지워졌습니다. (오래된 메일이거나 재부팅됨)"
             )
 
+async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
+    await update.message.reply_text("✅ 🤖 비서 봇이 정상적으로 살아있으며, 열심히 메일을 감시하고 있습니다!")
+
 def setup_telegram_handlers(application: Application):
     """
     텔레그램 봇의 인공지능 두뇌에 "만약 화면의 버튼이 눌리면 이렇게 대응해라~" 고 
     가이드라인(동작 감지기)을 등록시켜 주는 연결 장치입니다.
     """
     application.add_handler(CallbackQueryHandler(handle_button_callback))
+    application.add_handler(CommandHandler("status", command_status))

@@ -16,11 +16,16 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-# 결과물 저장용 로컬 경로 (기본값 설정)
-SAVE_DIRECTORY_PATH = os.getenv("SAVE_DIRECTORY_PATH", "C:/Email_Reports")
-
 # 프로젝트 최상위 경로
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 결과물 저장용 로컬 경로 (루트 폴더 내 Saved_Reports)
+SAVE_DIRECTORY_PATH = os.getenv("SAVE_DIRECTORY_PATH", os.path.join(BASE_DIR, "Saved_Reports"))
+
+# 텔레그램 메일 핑퐁(스레드) 추적 장부 설정
+THREAD_CACHE_FILE = os.path.join(BASE_DIR, "thread_memory.json")
+THREAD_MAX_SIZE = 2000     # 최대 스레드 기억 용량
+THREAD_TIMEOUT_DAYS = 90   # 90일 지난 대화는 타임아웃 리셋
 
 # 전역 로거(Logger) 설정 함수
 def setup_logger():

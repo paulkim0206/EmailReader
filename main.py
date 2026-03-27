@@ -7,6 +7,7 @@ from config import TELEGRAM_BOT_TOKEN, logger
 from mail_parser import fetch_unseen_emails, save_processed_uid
 from ai_processor import process_email_with_ai
 from telegram_bot import send_email_alert, setup_telegram_handlers
+from thread_manager import get_or_create_thread
 
 async def background_mail_checker(application: Application):
     """
@@ -37,17 +38,20 @@ async def background_mail_checker(application: Application):
                 logger.info(f"앗! 주인님에게 {len(unseen_emails)}통의 새로운 중요한 이메일이 찾아왔습니다.")
                 
             for mail_data in unseen_emails:
-                # 2. 아주 똑똑한 AI 비서에게 건네주면서 전체 내용과 예전 말길까지 전부 합쳐서 요약해 달라고 부탁합니다.
-                ai_result = process_email_with_ai(mail_data['body'])
+                # 2. 이번 메일이 어떤 핑퐁(스레드)방에 속하는지 기억 장부에서 찾고 카운트를 셉니다.
+                base_subj, t_data = get_or_create_thread(mail_data["subject"])
+                
+                # 3. 핑퐁 카운트와 '이전 대화 요약본'을 AI에게 넘겨줘서 문맥을 이해시킵니다.
+                ai_result = process_email_with_ai(mail_data, t_data["count"], t_data.get("latest_summary", ""))
                 
                 # [아이디어 노트 반영] 카테고리가 '스킵'으로 분류된 단순 인사/단답 메일은 알림을 보내지 않고 무시합니다.
                 if ai_result.get('category', '') == '스킵':
                     logger.info(f"🛡️ AI 필터 작동: 단답형/인사성 무의미한 메일 알림 차단됨 (제목: {mail_data.get('subject')})")
                 else:
-                    # 3. 의미 있는 요약본만 나의 스마트폰(텔레그램)으로 띠링! 배달합니다.
-                    await send_email_alert(application, mail_data, ai_result)
+                    # 4. 의미 있는 요약본만 이전 텔레그램 말풍선에 묶어(Reply) 배달합니다.
+                    await send_email_alert(application, mail_data, ai_result, t_data, base_subj)
                 
-                # 4. 방금 우리가 처리한 이메일은 두 번 다시 읽어서 똑같은 카톡을 또 보내는 실수를 막기 위해
+                # 5. 방금 우리가 처리한 이메일은 두 번 다시 읽어서 똑같은 카톡을 또 보내는 실수를 막기 위해
                 # 중복 방어 장부에 고유번호를 볼펜으로 세게 꾹꾹 눌러 적습니다.
                 save_processed_uid(mail_data['uid'])
 

@@ -3,6 +3,7 @@ import email
 from email.header import decode_header
 import json
 import os
+import re
 from bs4 import BeautifulSoup
 from config import IMAP_SERVER, IMAP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD, logger, BASE_DIR
 
@@ -117,6 +118,41 @@ def decode_email_header(raw_header):
             result += decoded_string
     return result
 
+def clean_reply_history(text):
+    """
+    과거 답장 이력을 기계적으로 가위질하여 오직 '방금 새로 쳐진 알맹이 타자'만 쏙 빼냅니다.
+    """
+    if not text:
+        return text
+    
+    # 전 세계 이메일 공통 구분선(Boundary) 암호들입니다.
+    patterns = [
+        # 1. 사용자님 회사 그룹웨어 전용 (가로/세로선 디자인 안쪽의 순수 텍스트 헤더)
+        r"(?im)^(일자|Date|날짜)\s*:.*?\nFrom\s*:.*?\nTo\s*:",
+        r"(?im)^From\s*:.*?\n(?:Sent|Date|일자|날짜)\s*:.*?\nTo\s*:",
+        
+        # 2. 일반 상용 메일 공통 (아웃룩, 지메일, 아이폰)
+        r"(?i)-{3,}\s*(Original Message|원\s*본\s*메\s*시\s*지)\s*-{3,}",
+        r"(?im)^On\s+.*?(?:wrote|작성|보냈습니다)\s*:$",
+        r"(?im)^보낸\s*사람\s*:.*?\n보낸\s*날짜\s*:.*?\n받는\s*사람\s*:",
+        r"(?im)^\s*>\s*.*$",
+        r"(?im)^20\d{2}[\.\-년]\s*\d{1,2}[\.\-월]\s*\d{1,2}[\.\-일].*?작성\s*:$"
+    ]
+    
+    min_index = len(text)
+    for p in patterns:
+        match = re.search(p, text)
+        if match:
+            if match.start() < min_index:
+                min_index = match.start()
+                
+    if min_index < len(text):
+        new_text = text[:min_index].strip()
+        if new_text:
+            return new_text
+            
+    return text.strip()
+
 def fetch_unseen_emails():
     """
     메일 서버에 '암호화된 안전한 통로'로 접속하여 '읽지 않은 메일'만 조심스럽게 가져오는 메인 함수입니다.
@@ -165,6 +201,7 @@ def fetch_unseen_emails():
             sender = decode_email_header(msg.get("From"))
             date = decode_email_header(msg.get("Date"))
             body = get_text_from_email(msg)
+            new_body = clean_reply_history(body)
 
             # 분석을 위해 예쁘게 한 바구니에 담아 놓습니다.
             fetched_emails.append({
@@ -172,7 +209,8 @@ def fetch_unseen_emails():
                 "subject": subject,
                 "sender": sender,
                 "date": date,
-                "body": body
+                "body": body,        # 전체 과거 이력 포함
+                "new_body": new_body # 싹둑 자른 방금 쓴 새 내용
             })
             
             logger.info(f"새로운 메일을 안전하게 읽어왔습니다: {subject}")

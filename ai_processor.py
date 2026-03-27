@@ -11,28 +11,48 @@ from config import GEMINI_API_KEY, logger
 
 # 2. 비서에게 어떻게 요약해야 할지 가르치는 시스템 지시문입니다.
 SYSTEM_PROMPT = """
-당신은 무역, 구매, 영업 관리 등 광범위한 실무를 총괄하는 최고급 이메일 비서입니다. 
+당신은 무역, 구매, 영업, 영업관리 등 광범위한 실무를 총괄하는 최고급 이메일 비서입니다. 
 제공되는 이메일 텍스트를 꼼꼼히 읽어보되, 이전에 주고받은 답변 내역(인용문)이 있다면 그 대화의 전체 문맥과 흐름까지 모두 파악하여 분석하십시오.
 분석 후 반드시 아래 JSON 포맷 형식을 철저히 지켜서 결과를 반환하십시오:
 
 {
-    "category": "'영업', '구매', '내부보고', '기타', '스킵' 이 5가지 단어 중 하나만 선택 (단, '수고하세요', '네 알겠습니다', '확인했습니다' 같은 극히 단순한 인사나, 내용이 거의 없는 단답형 메일, 또는 중요치 않게 중복되는 메일인 경우 반드시 '스킵'을 깐깐하게 선택할 것)",
-    "summary": "과거 대화의 맥락을 파악하고, 글이 빽빽하지 않도록 각 주제 문단마다 반드시 줄바꿈(엔터)을 2번씩 넉넉하게 띄워 시원하게 여백을 주고, 주요 핵심은 마크다운(*, # 등)을 절대 쓰지 말고 진짜 텍스트 기호(• 기호 등)만 써서 폰에서 완벽하게 읽히도록 요약할 것. (만약 category가 '스킵'이면 요약을 생략해도 무방함)",
-    "advice": "해당 카테고리에 맞는 실무적 조언 (예: 무역 조건 검토, 납기 지연 리스크 등) (방어적 대응이 필요할 시 강조할 것)"
+    "category": "'영업', '구매', '내부보고', '무역',  '기타', '스킵' 이 6가지 단어 중 하나만 선택 (단, '수고하세요', '네 알겠습니다', '확인했습니다' 같은 극히 단순한 인사나, 내용이 거의 없는 단답형 메일, 또는 중요치 않게 중복되는 메일인 경우 반드시 '스킵'을 깐깐하게 선택할 것)",
+    "summary": "과거 대화의 맥락을 파악하고, 글이 빽빽하지 않도록 각 주제 문단마다 반드시 줄바꿈(엔터)을 1번씩 넉넉하게 띄워 여백을 주고, 주요 핵심은 마크다운(*, # 등)을 절대 쓰지 말고 진짜 텍스트 기호(• 기호 등)만 써서 폰에서 완벽하게 읽히도록 요약할 것. (만약 category가 '스킵'이면 요약을 생략해도 무방함)"
 }
 """
 
-def process_email_with_ai(email_text):
+def process_email_with_ai(mail_data, thread_count, latest_summary=""):
     """
-    이전 단계에서 뽑아낸 이메일 글씨를 가장 똑똑한 최신형 AI 두뇌(Gemini 3.0)로 보내고, 
-    분석된 결과를 다시 받아오는 핵심 함수입니다. (사용자님의 제안으로 최신 코드로 전면 개조됨!)
+    핑퐁 카운트와 이전 요약본(latest_summary)을 토대로, 문맥을 놓치지 않는 지능형 AI 함수입니다.
     """
-    if not email_text or email_text == "본문 추출 불가 메일" or not GEMINI_API_KEY:
+    email_body = mail_data.get('body', '')
+    if not email_body or email_body == "본문 추출 불가 메일" or not GEMINI_API_KEY:
         return {
             "category": "기타",
-            "summary": "메일 본문이 없거나 AI API 키 설정을 찾을 수 없어 분석할 수 없습니다.",
-            "advice": "확인이 불가능합니다."
+            "summary": "메일 본문이 없거나 AI API 키 설정을 찾을 수 없어 분석할 수 없습니다."
         }
+
+    # 비용 절감을 위한 핑퐁 다이나믹 프롬프트 작성!
+    is_comprehensive = (thread_count == 1 or thread_count % 5 == 0)
+    target_text = mail_data.get('body', '') if is_comprehensive else mail_data.get('new_body', '')
+    
+    if not target_text.strip():
+        target_text = email_body
+        
+    if is_comprehensive:
+        mission = "지금까지 핑퐁된 대화 맥락을 총정리해서, 이 대화의 기승전결(전체 흐름)을 종합적으로 세세하게 요약해 줄 것."
+        final_text = target_text
+    else:
+        mission = "이전에 요약해둔 [이전까지의 대화 핵심 요약 리마인드] 내용을 읽고 문맥의 흐름을 파악한 뒤, 그것과 논리적으로 자연스럽게 이어지게끔 [방금 새로 도착한 메시지 원문]의 내용만 덧붙여서 아주 스마트하게 단문 요약할 것."
+        if latest_summary:
+            final_text = f"--- [이전까지의 대화 핵심 요약 리마인드] ---\n{latest_summary}\n\n--- [방금 새로 도착한 메시지 원문] ---\n{target_text}"
+        else:
+            final_text = target_text
+        
+    dynamic_prompt = SYSTEM_PROMPT.replace(
+        "이전에 주고받은 답변 내역(인용문)이 있다면 그 대화의 전체 문맥과 흐름까지 모두 파악하여 분석하십시오.",
+        mission
+    )
 
     # 최신 패키지 코드 방식(genai.Client)에 맞춰 구글 서버 입장권을 제시합니다.
     try:
@@ -47,7 +67,7 @@ def process_email_with_ai(email_text):
     # 표(JSON) 모양으로만 답을 주도록 단단히 교육하는 최신버전 전용 설정값입니다.
     try:
         req_config = types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
+            system_instruction=dynamic_prompt,
             response_mime_type="application/json"
         )
     except Exception as e:
@@ -61,7 +81,7 @@ def process_email_with_ai(email_text):
             # 사용자님께서 콕 찝어주신 최신 모델명('gemini-3-flash-preview')을 장착합니다!
             response = client.models.generate_content(
                 model="gemini-3-flash-preview",
-                contents=email_text,
+                contents=final_text,
                 config=req_config
             )
 
@@ -88,6 +108,5 @@ def _fallback_response():
     """
     return {
         "category": "오류",
-        "summary": "AI 서버(구글 허가 서버) 문제로 이번 메일은 임시로 요약하지 못했습니다.",
-        "advice": "잠시 네트워크나 외부 API 상태가 안 좋으니, 나중에 원문 이메일을 직접 확인해주시기 바랍니다."
+        "summary": "AI 서버(구글 허가 서버) 문제로 이번 메일은 임시로 요약하지 못했습니다.\n\n잠시 네트워크나 외부 API 상태가 안 좋으니, 나중에 원문 이메일을 직접 확인해주시기 바랍니다."
     }
