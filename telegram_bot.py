@@ -37,16 +37,16 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
         "ai": ai_result
     }
     
-    # 핑퐁 횟수가 몇 번째인지 사용자에게도 자랑스럽게 보여줍니다!
-    thread_badge = f"[핑퐁 {t_data['count']}회차]" if t_data['count'] > 1 else "[새로운 대화 시작]"
+    # V1.11.0: 핑퐁 여부는 AI가 판단한 is_thread로 확인합니다.
+    is_thread = ai_result.get('is_thread', False)
+    thread_index = ai_result.get('thread_index', 1)
 
     message_text = (
-        f"📧 <b>{thread_badge} 이메일 알림</b>\n\n"
+        f"📧 <b>이메일 알림</b>\n\n"
         f"🕒 <b>수신 일시:</b> {escape_for_tg(mail_data.get('date', ''))}\n"
         f"👤 <b>보낸 사람:</b> {escape_for_tg(mail_data.get('sender', ''))}\n"
-        f"📝 <b>메일 제목:</b> {escape_for_tg(mail_data.get('subject', ''))}\n"
-        f"🗂 <b>분류 결과:</b> {escape_for_tg(ai_result.get('category', ''))}\n\n"
-        f"💡 <b>전체 흐름 요약:</b>\n{escape_for_tg(ai_result.get('summary', ''))}"
+        f"📝 <b>메일 제목:</b> {escape_for_tg(mail_data.get('subject', ''))}\n\n"
+        f"💡 <b>요약:</b>\n{escape_for_tg(ai_result.get('summary', ''))}"
     )
 
     # 텔레그램 메신저는 욕심을 부려 한 번에 너무 많은 글씨(4096자)를 쑤셔 넣으면
@@ -66,7 +66,7 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
                 # 사용자가 버튼을 누르면 "save_<고유번호>" 또는 "block_<고유번호>" 란 암호 신호를 튕깁니다!
                 keyboard = [
                     [InlineKeyboardButton("💾 마크다운(.md) 문서로 저장하기", callback_data=f"save_{uid}")],
-                    [InlineKeyboardButton("🚫 이 보낸 사람 블랙리스트 차단 (스팸 등록)", callback_data=f"block_{uid}")],
+                    [InlineKeyboardButton("🔇 이 발송자, 앞으로 요약 알림 받지 않기", callback_data=f"block_{uid}")],
                     [InlineKeyboardButton("👎 이런 류의 메일 내용 요약 제외 (AI 학습)", callback_data=f"learn_{uid}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -79,12 +79,12 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
                 reply_markup=reply_markup
             )
             
-            # 첫 번째 조각이 성공적으로 배달되었으면, 이 새로운 말풍선 번호와 방금 만든 '요약본'을 장부에 저장합니다!
+            # 첫 번째 조각이 배달되면 텔레그램 말풍선 ID를 t_data에 저장해 둡니다.
+            # (main.py에서 save_thread_entry 호출 시 msg_id를 업데이트합니다)
             if i == 0:
-                from thread_manager import update_thread_data
-                update_thread_data(base_subj, msg_id=sent_msg.message_id, latest_summary=ai_result.get("summary", ""))
+                t_data["msg_id"] = sent_msg.message_id
             
-        logger.info(f"텔레그램 스레드(핑퐁) 알림이 성공적으로 연결되었습니다! (메일번호 {uid})")
+        logger.info(f"텔레그램 알림 전송 완료! (메일번호 {uid})")
     except Exception as e:
         logger.error(f"텔레그램 전력망 장애로 소식 전달에 슬프게도 실패했습니다: {e}")
 
@@ -142,17 +142,15 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             success, result_msg = add_to_blacklist(sender)
 
             if success:
-                # 차단이 성공하면 앗! 차단이 완료되었다는 안내와 함께 기존 버튼 판을 아예 엎어버립니다. (중복 방지)
-                await query.edit_message_reply_markup(reply_markup=None) 
-                
+                await query.edit_message_reply_markup(reply_markup=None)
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text=f"🚨 탕탕! 블랙리스트 확정!\n이제 [{result_msg}] 놈이 보내는 모든 이메일은 가차 없이 파이썬 문지기가 찢어버릴 것입니다!!"
+                    text=f"✅ 등록 완료.\n앞으로 [{result_msg}] 님의 메일은 텔레그램 요약 알림을 보내지 않고 조용히 패스하겠습니다.\n(원본 이메일은 이메일함에 정상적으로 보관되어 있습니다.)"
                 )
             else:
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text=f"⚠️ 이미 지옥(블랙리스트)에 간 녀석이거나 주소를 잡을 수 없습니다: {result_msg}"
+                    text=f"⚠️ 이미 등록된 발송자이거나 주소를 확인할 수 없습니다: {result_msg}"
                 )
         else:
             await context.bot.send_message(

@@ -7,7 +7,8 @@ from config import TELEGRAM_BOT_TOKEN, logger
 from mail_parser import fetch_unseen_emails, save_processed_uid
 from ai_processor import process_email_with_ai
 from telegram_bot import send_email_alert, setup_telegram_handlers
-from thread_manager import get_or_create_thread
+from thread_manager import format_threads_for_prompt, save_thread_entry, get_thread_msg_id
+from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue
 
 async def background_mail_checker(application: Application):
     """
@@ -20,7 +21,54 @@ async def background_mail_checker(application: Application):
 
     while True: # 언제 컴퓨터 전원이 뽑히기 전까지는 포기하지 않고 돕니다.
         try:
-            # 1. 메일함에서 안 읽은 새 편지를 살금살금 (보안 속성 PEEK) 꺼내옵니다.
+            # [V1.12.0] 매 사이클 시작 시 재시도 대기열 확인 및 처리
+            pending_retries = get_pending_retries()
+            if pending_retries:
+                logger.info(f"재시도 대기열에서 {len(pending_retries)}건 처리 시작...")
+                for retry_item in pending_retries:
+                    retry_mail = retry_item["mail_data"]
+                    retry_uid = retry_item["uid"]
+                    thread_history_text = format_threads_for_prompt()
+                    ai_result = process_email_with_ai(retry_mail, thread_history_text)
+
+                    if ai_result.get('is_ai_error'):
+                        # 재시도도 실패 → 사용자에게 최종 오류 알림 전송
+                        logger.warning(f"재시도도 실패. 최종 오류 알림 전송: {retry_mail.get('subject')}")
+                        await application.bot.send_message(
+                            chat_id=str(__import__('config').TELEGRAM_CHAT_ID),
+                            text=(
+                                f"⚠️ <b>AI 요약 최종 실패</b>\n\n"
+                                f"🕒 <b>수신:</b> {retry_mail.get('date', '')}\n"
+                                f"👤 <b>발신:</b> {retry_mail.get('sender', '')}\n"
+                                f"📝 <b>제목:</b> {retry_mail.get('subject', '')}\n\n"
+                                f"AI 서버가 5분 후 재시도에도 응답하지 않았습니다.\n"
+                                f"원본 이메일을 직접 확인해 주십시오."
+                            ),
+                            parse_mode="HTML"
+                        )
+                    else:
+                        # 재시도 성공 → 정상 요약 전송
+                        logger.info(f"재시도 성공! 요약 전송: {retry_mail.get('subject')}")
+                        thread_key = ai_result.get('thread_key', retry_mail.get('subject', ''))
+                        thread_index = ai_result.get('thread_index', 1)
+                        is_thread = ai_result.get('is_thread', False)
+                        t_data = {}
+                        if is_thread:
+                            existing_msg_id = get_thread_msg_id(thread_key)
+                            if existing_msg_id:
+                                t_data = {"msg_id": existing_msg_id}
+                        await send_email_alert(application, retry_mail, ai_result, t_data, thread_key)
+                        save_thread_entry(
+                            thread_key=thread_key,
+                            thread_index=thread_index,
+                            summary=ai_result.get('summary', ''),
+                            msg_id=t_data.get('msg_id')
+                        )
+
+                    # 성공/실패 무관 대기열에서 삭제
+                    remove_from_retry_queue(retry_uid)
+
+
             unseen_emails = fetch_unseen_emails()
             
             # [아이디어 노트 반영] 서버 켜기 전부터 쌓여있던 안 읽은 메일은 알람을 보내지 않고 일괄 무시 처리합니다.
@@ -48,21 +96,45 @@ async def background_mail_checker(application: Application):
                     save_processed_uid(mail_data['uid'])
                     continue
 
-                # 2. 이번 메일이 어떤 핑퐁(스레드)방에 속하는지 기억 장부에서 찾고 카운트를 셉니다.
-                base_subj, t_data = get_or_create_thread(mail_data["subject"])
-                
-                # 3. 핑퐁 카운트와 '누적 요약망(이전 대화 전체 리스트)'을 AI에게 주입해 문맥을 100% 이해시킵니다.
-                ai_result = process_email_with_ai(mail_data, t_data["count"], t_data.get("summary_history", []))
-                
-                # [아이디어 노트 반영] 카테고리가 '스킵'으로 분류된 단순 인사/단답 메일은 알림을 보내지 않고 무시합니다.
-                if ai_result.get('category', '') == '스킵':
-                    logger.info(f"🛡️ AI 필터 작동: 단답형/인사성 무의미한 메일 알림 차단됨 (제목: {mail_data.get('subject')})")
+                # 2. [V1.11.0] 장부 전체를 인덱스 포함 텍스트로 포맷해서 제미나이에게 던집니다.
+                thread_history_text = format_threads_for_prompt()
+
+                # 3. 제미나이가 원본+장부를 읽고 모든 판단을 합니다.
+                ai_result = process_email_with_ai(mail_data, thread_history_text)
+
+                # 4. AI 판단 결과에 따라 처리합니다.
+                if ai_result.get('status') == '스킵':
+                    logger.info(f"AI 판단: 요약 불필요 메일 패스 (제목: {mail_data.get('subject')})")
+
+                elif ai_result.get('is_ai_error'):
+                    # AI 12회 전부 실패 → 재시도 대기열에 조용히 저장, 텔레그램 알림 없음
+                    logger.warning(f"AI 전체 실패. 재시도 대기열 등록: {mail_data.get('subject')}")
+                    add_to_retry_queue(mail_data)
+
                 else:
-                    # 4. 의미 있는 요약본만 이전 텔레그램 말풍선에 묶어(Reply) 배달합니다.
-                    await send_email_alert(application, mail_data, ai_result, t_data, base_subj)
-                
-                # 5. 방금 우리가 처리한 이메일은 두 번 다시 읽어서 똑같은 카톡을 또 보내는 실수를 막기 위해
-                # 중복 방어 장부에 고유번호를 볼펜으로 세게 꾹꾹 눌러 적습니다.
+                    thread_key = ai_result.get('thread_key', mail_data.get('subject', ''))
+                    thread_index = ai_result.get('thread_index', 1)
+                    is_thread = ai_result.get('is_thread', False)
+
+                    # 핑퐁이면 기존 텔레그램 말풍선 ID를 가져와 답장으로 연결합니다.
+                    t_data = {}
+                    if is_thread:
+                        existing_msg_id = get_thread_msg_id(thread_key)
+                        if existing_msg_id:
+                            t_data = {"msg_id": existing_msg_id}
+
+                    await send_email_alert(application, mail_data, ai_result, t_data, thread_key)
+
+                    # 5. 제미나이가 알려준 인덱스와 요약을 장부에 저장합니다. (서기 역할)
+                    # send_email_alert 내부에서 첫 말풍선 ID를 t_data["msg_id"]에 채워줍니다.
+                    save_thread_entry(
+                        thread_key=thread_key,
+                        thread_index=thread_index,
+                        summary=ai_result.get('summary', ''),
+                        msg_id=t_data.get('msg_id')
+                    )
+
+                # 6. 중복 처리 방지를 위해 처리 완료 UID를 기록합니다.
                 save_processed_uid(mail_data['uid'])
 
             # 한 바퀴 싹 돌았으니, 1분(60초) 동안 공장의 과부하를 막고 인터넷 서버가 화나지 않게 숨을 고릅니다.

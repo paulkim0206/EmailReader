@@ -1,8 +1,10 @@
 import json
 import os
-import re
 import datetime
-from config import THREAD_CACHE_FILE, THREAD_MAX_SIZE, THREAD_TIMEOUT_DAYS, logger
+from config import THREAD_CACHE_FILE, THREAD_MAX_SIZE, logger
+
+THREAD_HISTORY_LIMIT = 5      # 스레드당 최대 보관 요약 개수
+THREAD_TIMEOUT_DAYS = 30      # 30일 이상 소식 없으면 방 삭제
 
 def load_threads():
     if os.path.exists(THREAD_CACHE_FILE):
@@ -15,76 +17,110 @@ def load_threads():
 
 def save_threads(threads):
     try:
-        # 한도 초과 시 오래된(Last Date) 순으로 잘라내는 자동 청소(LRU) 로직
+        # 전체 주제 방이 너무 많아지면 가장 오래된 방부터 정리합니다.
         if len(threads) > THREAD_MAX_SIZE:
-            sorted_keys = sorted(threads.keys(), key=lambda k: threads[k].get("last_date", ""), reverse=True)
+            sorted_keys = sorted(
+                threads.keys(),
+                key=lambda k: threads[k].get("last_date", ""),
+                reverse=True
+            )
             threads = {k: threads[k] for k in sorted_keys[:THREAD_MAX_SIZE]}
-            
         with open(THREAD_CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(threads, f, ensure_ascii=False, indent=4)
     except Exception as e:
-        logger.error(f"핑퐁 메모리 장부 저장 실패: {e}")
+        logger.error(f"장부 저장 실패: {e}")
 
-def get_base_subject(subject):
-    """'Re:', 'Fwd:' 같은 이메일 꼬리표를 기계적으로 무시하고 순수 제모만 적출합니다."""
-    if not subject:
-        return ""
-    cleaned = re.sub(r'(?i)^(re|fwd|fw|답장|전달)\s*:\s*', '', subject).strip()
-    # 꼬리가 여러 개 달릴 수 있으니 두어 번 더 청소합니다 (예: Re: Fwd: Re: 제목)
-    for _ in range(3):
-        cleaned = re.sub(r'(?i)^(re|fwd|fw|답장|전달)\s*:\s*', '', cleaned).strip()
-    return cleaned
-
-def get_or_create_thread(subject):
-    """제목을 바탕으로 장부에서 스레드 방을 찾아오고 핑퐁 카운트를 계산합니다."""
+def format_threads_for_prompt():
+    """
+    제미나이에게 던질 장부를 준비합니다.
+    - 30일 이상 소식 없는 오래된 방은 자동 삭제합니다.
+    - 각 방의 요약 기록에 #인덱스 번호를 붙여서 텍스트로 포맷합니다.
+    - 각 방에서는 최신 5개까지만 전달합니다.
+    """
     threads = load_threads()
-    base_subj = get_base_subject(subject)
+    now = datetime.datetime.now()
+    cleaned = {}
+
+    for key, data in threads.items():
+        last_date_str = data.get("last_date", "")
+        try:
+            last_date = datetime.datetime.fromisoformat(last_date_str)
+            if (now - last_date).days >= THREAD_TIMEOUT_DAYS:
+                logger.info(f"30일 타임아웃: '{key}' 방을 장부에서 삭제합니다.")
+                continue  # 30일 초과 방은 제외 (다음 저장 시 실제로 삭제됨)
+        except Exception:
+            pass
+        cleaned[key] = data
+
+    # 변경사항이 있으면 저장
+    if len(cleaned) != len(threads):
+        save_threads(cleaned)
+
+    if not cleaned:
+        return "없음"  # 장부가 텅 비었을 때
+
+    lines = []
+    for thread_key, data in cleaned.items():
+        history = data.get("summary_history", [])
+        # 최신 5개만 잘라서 포맷
+        recent = history[-THREAD_HISTORY_LIMIT:]
+        formatted_entries = []
+        for i, entry in enumerate(recent):
+            if isinstance(entry, dict):
+                idx = entry.get("index", i + 1)
+                date = entry.get("date", "날짜 미상")
+                summary = entry.get("summary", "")
+            else:
+                # 기존 구형 문자열 포맷 호환 처리
+                idx = i + 1
+                date = "날짜 미상"
+                summary = entry
+            formatted_entries.append(f"  #{idx} [{date}]: {summary}")
+
+        lines.append(f"[주제: {thread_key}]")
+        lines.extend(formatted_entries)
+
+    return "\n".join(lines)
+
+def save_thread_entry(thread_key, thread_index, summary, msg_id=None):
+    """
+    제미나이가 판단한 결과(thread_key, thread_index, summary)를 장부에 저장합니다.
+    파이썬은 아무 판단 없이 제미나이가 시키는 대로만 적습니다.
+    """
+    threads = load_threads()
     now_str = datetime.datetime.now().isoformat()
-    
-    if base_subj in threads:
-        t_data = threads[base_subj]
-        last_date = datetime.datetime.fromisoformat(t_data.get("last_date", now_str))
-        
-        # 90일 지났으면 타임아웃 리셋! (3개월 망각 조작)
-        if (datetime.datetime.now() - last_date).days >= THREAD_TIMEOUT_DAYS:
-            logger.info(f"오래된 대화방 부활! ({base_subj}) 카운트 리셋!")
-            t_data["count"] = 1
-            t_data["msg_id"] = None
-        else:
-            t_data["count"] = t_data.get("count", 0) + 1
-            
-        t_data["last_date"] = now_str
-    else:
-        # 완전히 새로운 대화 시작
-        threads[base_subj] = {
-            "count": 1,
+
+    new_entry = {
+        "index": thread_index,
+        "date": now_str[:10],  # YYYY-MM-DD
+        "summary": summary
+    }
+
+    if thread_key not in threads:
+        threads[thread_key] = {
             "msg_id": None,
             "last_date": now_str,
             "summary_history": []
         }
-        t_data = threads[base_subj]
-        
-    save_threads(threads) # [치명적 버그 수정] 지금까지 장부에 적어만 놓고 디스크 저장을 누락했던 코드 추가!
-    return base_subj, t_data
 
-def update_thread_data(base_subj, msg_id=None, latest_summary=None):
-    """텔레그램 말풍선 번호와, AI가 방금 만들어낸 요약본을 누적 장부에 확정 저장합니다."""
-    threads = load_threads()
-    
-    # [치명적 버그 수정] 혹시라도 메모리에서 증발했다면 다시 빈 방을 무조건 만들어 줍니다.
-    if base_subj not in threads:
-        threads[base_subj] = {
-            "count": 1,
-            "msg_id": None,
-            "last_date": datetime.datetime.now().isoformat(),
-            "summary_history": []
-        }
-        
+    threads[thread_key]["last_date"] = now_str
     if msg_id is not None:
-        threads[base_subj]["msg_id"] = msg_id
-    if latest_summary is not None:
-        if "summary_history" not in threads[base_subj]:
-            threads[base_subj]["summary_history"] = []
-        threads[base_subj]["summary_history"].append(latest_summary)
-        
+        threads[thread_key]["msg_id"] = msg_id
+
+    threads[thread_key]["summary_history"].append(new_entry)
+
+    # 스레드별 최신 5개 초과분 자동 삭제 (가비지 컬렉터)
+    history = threads[thread_key]["summary_history"]
+    if len(history) > THREAD_HISTORY_LIMIT:
+        threads[thread_key]["summary_history"] = history[-THREAD_HISTORY_LIMIT:]
+        logger.info(f"가비지 컬렉터: '{thread_key}' 방의 오래된 요약본을 정리했습니다.")
+
     save_threads(threads)
+    logger.info(f"장부 저장 완료: '{thread_key}' #{thread_index}")
+
+def get_thread_msg_id(thread_key):
+    """텔레그램 핑퐁 말풍선 연결을 위해 저장된 메시지 ID를 가져옵니다."""
+    threads = load_threads()
+    if thread_key in threads:
+        return threads[thread_key].get("msg_id")
+    return None

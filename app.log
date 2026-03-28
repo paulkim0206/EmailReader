@@ -817,3 +817,441 @@
 2026-03-28 13:42:02,321 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
 2026-03-28 13:42:03,249 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
 2026-03-28 13:42:03,489 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:42:22,483 - EmailAssistantLogger - INFO - 텔레그램 봇 두뇌와 통신망을 열심히 뚝딱뚝딱 조립하고 있습니다...
+2026-03-28 13:42:22,857 - EmailAssistantLogger - INFO - 텔레그램 제어 수신기('/status', '/메모' 등)와 버튼 수신기가 메인 서버에 장착 완료되었습니다.
+2026-03-28 13:42:23,940 - EmailAssistantLogger - INFO - 모든 부품과 톱니바퀴 준비 완료! 파이프라인 공장이 24시간 쌩쌩 가동됩니다.
+2026-03-28 13:42:23,940 - EmailAssistantLogger - INFO - 지능형 이메일 비서가 눈을 번쩍 뜨고 24시간 철통 경계 및 업무를 시작합니다!
+2026-03-28 13:42:23,940 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:42:24,580 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:42:24,812 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:42:24,812 - EmailAssistantLogger - INFO - 이제부터 새로 도착하는 따끈따끈한 새 이메일만 감시하여 실시간으로 보고합니다.
+2026-03-28 13:43:24,815 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:43:25,566 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:43:25,909 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:44:25,924 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:44:26,734 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:44:26,933 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:45:26,950 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:45:27,450 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:45:27,676 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:46:27,678 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:46:28,273 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:46:28,536 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:47:28,557 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:47:29,198 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:47:29,521 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:48:29,525 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:48:30,064 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:48:30,300 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:49:30,319 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:49:31,296 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:49:31,518 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:50:31,528 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:50:32,042 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:50:32,256 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:51:32,274 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:51:33,383 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:51:33,712 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:52:33,729 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:52:34,356 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:52:34,650 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:53:34,650 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:53:35,485 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:53:35,708 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:54:35,732 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:54:36,679 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:54:36,939 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:55:36,957 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:55:37,874 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:55:38,145 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:56:38,169 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:56:38,789 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:56:39,073 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:57:39,077 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:57:39,681 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:57:39,904 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:58:39,916 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:58:40,456 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:58:40,667 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 13:59:40,674 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 13:59:41,537 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 13:59:41,751 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:00:41,738 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:00:42,440 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:00:44,185 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: URGENT: PO #45457913 - Iwis Germany - Check leadtime for BL844
+2026-03-28 14:00:44,316 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:00:44,317 - EmailAssistantLogger - INFO - 앗! 주인님에게 1통의 새로운 중요한 이메일이 찾아왔습니다.
+2026-03-28 14:00:45,025 - EmailAssistantLogger - INFO - 최고급 머리를 가진 AI 비서(Gemini 3)에게 이메일 분석을 부탁하는 중입니다...
+2026-03-28 14:00:53,506 - EmailAssistantLogger - INFO - AI(Gemini 3.0) 분석이 성공적으로 날카롭게 끝났습니다!
+2026-03-28 14:00:54,638 - EmailAssistantLogger - INFO - 텔레그램 스레드(핑퐁) 알림이 성공적으로 연결되었습니다! (메일번호 48853)
+2026-03-28 14:01:54,650 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:01:56,118 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:01:56,553 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:02:56,567 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:02:57,078 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:02:57,308 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:03:57,314 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:03:59,001 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:03:59,283 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:04:59,300 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:05:00,034 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:05:00,354 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:06:00,358 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:06:01,261 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:06:01,479 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:07:01,496 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:07:02,335 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:07:02,571 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:08:02,570 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:08:03,594 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:08:03,822 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:09:03,818 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:09:04,305 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:09:04,522 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:10:04,532 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:10:05,595 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:10:05,800 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:11:05,818 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:11:06,389 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:11:06,612 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:12:06,621 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:12:07,356 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:12:07,626 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:13:07,646 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:13:08,288 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:13:08,557 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:14:08,574 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:14:09,344 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:14:09,607 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:15:09,610 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:15:10,138 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:15:10,353 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:16:10,375 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:16:11,333 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:16:11,608 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:17:11,614 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:17:12,233 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:17:13,356 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: [I&U] 196th scrap supply result (26.03.28)
+2026-03-28 14:17:13,542 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:17:13,543 - EmailAssistantLogger - INFO - 앗! 주인님에게 1통의 새로운 중요한 이메일이 찾아왔습니다.
+2026-03-28 14:17:14,245 - EmailAssistantLogger - INFO - 최고급 머리를 가진 AI 비서(Gemini 3)에게 이메일 분석을 부탁하는 중입니다...
+2026-03-28 14:17:22,970 - EmailAssistantLogger - INFO - AI(Gemini 3.0) 분석이 성공적으로 날카롭게 끝났습니다!
+2026-03-28 14:17:24,124 - EmailAssistantLogger - INFO - 텔레그램 스레드(핑퐁) 알림이 성공적으로 연결되었습니다! (메일번호 48854)
+2026-03-28 14:18:00,271 - EmailAssistantLogger - INFO - 🚫 [성공] 스팸 거머리 1명을 영구 차단했습니다: kimdungnguyen9793@gmail.com
+2026-03-28 14:18:24,145 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:18:25,117 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:18:25,392 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:19:25,413 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:19:26,018 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:19:26,282 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:20:26,310 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:20:28,080 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:20:28,297 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:21:28,308 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:21:28,830 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:21:29,064 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:22:29,080 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:22:29,613 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:22:29,817 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:23:29,837 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:23:30,411 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:23:30,673 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:24:30,695 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:24:31,214 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:24:31,439 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:25:31,457 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:25:32,025 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:25:32,243 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:26:32,254 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:26:32,932 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:26:33,216 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:27:33,227 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:27:34,404 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:27:34,670 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:28:34,688 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:28:35,189 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:28:35,408 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:29:35,411 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:29:36,134 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:29:36,355 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:30:36,349 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:30:36,885 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:30:37,120 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:31:37,127 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:31:37,605 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:31:37,809 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:32:37,819 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:32:38,325 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:32:38,556 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:33:38,567 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:33:39,339 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:33:39,625 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:34:39,638 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:34:40,157 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:34:40,379 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:35:40,387 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:35:41,375 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:35:41,598 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:36:41,621 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:36:42,145 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:36:42,398 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:37:42,414 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:37:43,193 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:37:43,391 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 14:38:43,408 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 14:38:43,992 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 14:38:44,266 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:03:03,236 - EmailAssistantLogger - INFO - 텔레그램 봇 두뇌와 통신망을 열심히 뚝딱뚝딱 조립하고 있습니다...
+2026-03-28 15:03:03,595 - EmailAssistantLogger - INFO - 텔레그램 제어 수신기('/status', '/메모' 등)와 버튼 수신기가 메인 서버에 장착 완료되었습니다.
+2026-03-28 15:03:04,711 - EmailAssistantLogger - INFO - 모든 부품과 톱니바퀴 준비 완료! 파이프라인 공장이 24시간 쌩쌩 가동됩니다.
+2026-03-28 15:03:04,711 - EmailAssistantLogger - INFO - 지능형 이메일 비서가 눈을 번쩍 뜨고 24시간 철통 경계 및 업무를 시작합니다!
+2026-03-28 15:03:04,712 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:03:05,246 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:03:09,543 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: Re:Reqeust for Contract
+2026-03-28 15:03:10,114 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: RE: [FB GER] REQUEST QUOTATION_F19H44
+2026-03-28 15:03:10,266 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:03:10,276 - EmailAssistantLogger - INFO - 서버 켜기 전부터 쌓여있던 과거 미확인 메일 2통은 알림 없이 조용히 무시(패스) 완료했습니다!
+2026-03-28 15:03:10,276 - EmailAssistantLogger - INFO - 이제부터 새로 도착하는 따끈따끈한 새 이메일만 감시하여 실시간으로 보고합니다.
+2026-03-28 15:04:10,285 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:04:11,304 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:04:11,532 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:05:11,527 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:05:12,038 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:05:12,255 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:06:12,267 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:06:13,312 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:06:13,531 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:07:13,537 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:07:14,113 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:07:14,343 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:08:14,350 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:08:15,044 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:08:15,259 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:09:15,262 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:09:15,856 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:09:16,073 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:10:16,085 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:10:16,727 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:10:19,308 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: Quality Comparision of 24B Chain
+2026-03-28 15:10:19,499 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:10:19,499 - EmailAssistantLogger - INFO - 앗! 주인님에게 1통의 새로운 중요한 이메일이 찾아왔습니다.
+2026-03-28 15:10:20,860 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:11:00,330 - EmailAssistantLogger - INFO - AI 분석 완료: status=알림, thread_key=24B 체인 품질 비교 분석 결과 보고 (DBC vs 고객사), index=1
+2026-03-28 15:11:00,335 - EmailAssistantLogger - ERROR - 메일 확인 중 심각한 폭풍우(오류)가 몰아쳤습니다!: 'count'
+2026-03-28 15:11:00,336 - EmailAssistantLogger - WARNING - 시스템이 완전히 망가지는 걸 방어하기 위해 잠시 5분 동안 땅굴에 대피(대기) 후 다시 밖으로 나옵니다!
+2026-03-28 15:15:09,042 - EmailAssistantLogger - INFO - 텔레그램 봇 두뇌와 통신망을 열심히 뚝딱뚝딱 조립하고 있습니다...
+2026-03-28 15:15:09,394 - EmailAssistantLogger - INFO - 텔레그램 제어 수신기('/status', '/메모' 등)와 버튼 수신기가 메인 서버에 장착 완료되었습니다.
+2026-03-28 15:15:10,486 - EmailAssistantLogger - INFO - 모든 부품과 톱니바퀴 준비 완료! 파이프라인 공장이 24시간 쌩쌩 가동됩니다.
+2026-03-28 15:15:10,486 - EmailAssistantLogger - INFO - 지능형 이메일 비서가 눈을 번쩍 뜨고 24시간 철통 경계 및 업무를 시작합니다!
+2026-03-28 15:15:10,487 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:15:11,101 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:15:13,180 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: Quality Comparision of 24B Chain
+2026-03-28 15:15:13,362 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:15:13,364 - EmailAssistantLogger - INFO - 서버 켜기 전부터 쌓여있던 과거 미확인 메일 1통은 알림 없이 조용히 무시(패스) 완료했습니다!
+2026-03-28 15:15:13,364 - EmailAssistantLogger - INFO - 이제부터 새로 도착하는 따끈따끈한 새 이메일만 감시하여 실시간으로 보고합니다.
+2026-03-28 15:16:13,379 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:16:13,862 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:16:14,069 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:17:14,089 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:17:14,613 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:17:14,835 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:18:14,846 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:18:16,827 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:18:17,918 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: List tồn kho NVL, Roller - Bush ngày 2026.03.28M
+2026-03-28 15:18:18,313 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:18:18,313 - EmailAssistantLogger - INFO - 앗! 주인님에게 1통의 새로운 중요한 이메일이 찾아왔습니다.
+2026-03-28 15:18:18,667 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:18:40,978 - EmailAssistantLogger - ERROR - AI 통신 오류 (시도 1/3): 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+2026-03-28 15:18:40,979 - EmailAssistantLogger - WARNING - 2초 후 재시도합니다.
+2026-03-28 15:18:42,979 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:19:45,456 - EmailAssistantLogger - INFO - AI 분석 완료: status=알림, thread_key=원자재 및 Roller-Bush 재고 현황 보고 (2026.03.28), index=1
+2026-03-28 15:19:46,579 - EmailAssistantLogger - INFO - 텔레그램 알림 전송 완료! (메일번호 48858)
+2026-03-28 15:19:46,582 - EmailAssistantLogger - INFO - 장부 저장 완료: '원자재 및 Roller-Bush 재고 현황 보고 (2026.03.28)' #1
+2026-03-28 15:20:46,600 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:20:47,307 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:20:47,608 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:21:47,614 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:21:48,159 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:21:48,382 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:21:58,831 - EmailAssistantLogger - INFO - 🚫 [성공] 스팸 거머리 1명을 영구 차단했습니다: dbcv021@dongbochain.com
+2026-03-28 15:22:48,382 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:22:48,889 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:22:49,106 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:23:49,104 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:23:49,606 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:23:49,816 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:24:40,980 - EmailAssistantLogger - INFO - 텔레그램 봇 두뇌와 통신망을 열심히 뚝딱뚝딱 조립하고 있습니다...
+2026-03-28 15:24:41,350 - EmailAssistantLogger - INFO - 텔레그램 제어 수신기('/status', '/메모' 등)와 버튼 수신기가 메인 서버에 장착 완료되었습니다.
+2026-03-28 15:24:42,420 - EmailAssistantLogger - INFO - 모든 부품과 톱니바퀴 준비 완료! 파이프라인 공장이 24시간 쌩쌩 가동됩니다.
+2026-03-28 15:24:42,420 - EmailAssistantLogger - INFO - 지능형 이메일 비서가 눈을 번쩍 뜨고 24시간 철통 경계 및 업무를 시작합니다!
+2026-03-28 15:24:42,420 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:24:42,922 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:24:43,127 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:24:43,128 - EmailAssistantLogger - INFO - 이제부터 새로 도착하는 따끈따끈한 새 이메일만 감시하여 실시간으로 보고합니다.
+2026-03-28 15:25:43,143 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:25:43,648 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:25:43,855 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:26:43,867 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:26:44,761 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:26:44,974 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:27:44,989 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:27:45,456 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:27:45,668 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:28:45,680 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:28:46,716 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:28:47,001 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:29:47,027 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:29:47,520 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:29:47,750 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:30:47,762 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:30:48,497 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:30:48,732 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:31:48,760 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:31:49,267 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:31:49,486 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:32:49,491 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:32:50,326 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:32:50,529 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:33:50,529 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:33:51,007 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:33:51,230 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:34:51,229 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:34:51,889 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:34:52,271 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: RE: URGENT: PO #45457913 - Iwis Germany - Check leadtime for BL844
+2026-03-28 15:34:52,412 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:34:52,412 - EmailAssistantLogger - INFO - 앗! 주인님에게 1통의 새로운 중요한 이메일이 찾아왔습니다.
+2026-03-28 15:34:53,513 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:35:10,769 - EmailAssistantLogger - INFO - AI 분석 완료: status=알림, thread_key=URGENT: PO #45457913 - Iwis Germany - Check leadtime for BL844, index=2
+2026-03-28 15:35:12,147 - EmailAssistantLogger - INFO - 텔레그램 알림 전송 완료! (메일번호 48859)
+2026-03-28 15:35:12,149 - EmailAssistantLogger - INFO - 장부 저장 완료: 'URGENT: PO #45457913 - Iwis Germany - Check leadtime for BL844' #2
+2026-03-28 15:36:12,165 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:36:12,794 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:36:13,073 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:37:13,070 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:37:13,566 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:37:13,777 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:38:13,792 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:38:14,308 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:38:14,541 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:39:14,553 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:39:15,423 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:39:15,672 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:40:15,695 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:40:16,345 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:40:16,645 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:41:16,657 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:41:17,651 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:41:18,416 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: RE: 자재청구의뢰서(원자재, 5월 납기) - 26.03.24
+2026-03-28 15:41:18,598 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:41:18,599 - EmailAssistantLogger - INFO - 앗! 주인님에게 1통의 새로운 중요한 이메일이 찾아왔습니다.
+2026-03-28 15:41:19,994 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:41:42,490 - EmailAssistantLogger - INFO - AI 분석 완료: status=알림, thread_key=자재청구의뢰서(원자재, 5월 납기) 대응 및 분납 협의, index=1
+2026-03-28 15:41:43,708 - EmailAssistantLogger - INFO - 텔레그램 알림 전송 완료! (메일번호 48860)
+2026-03-28 15:41:43,710 - EmailAssistantLogger - INFO - 장부 저장 완료: '자재청구의뢰서(원자재, 5월 납기) 대응 및 분납 협의' #1
+2026-03-28 15:42:43,714 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:42:44,333 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:42:44,606 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:43:44,611 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:43:45,786 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:43:46,340 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: RE: Check Leadtime for Clark New Inquiry BL1266 _ 260327
+2026-03-28 15:43:46,531 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:43:46,533 - EmailAssistantLogger - INFO - 앗! 주인님에게 1통의 새로운 중요한 이메일이 찾아왔습니다.
+2026-03-28 15:43:47,524 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:44:09,122 - EmailAssistantLogger - ERROR - AI 통신 오류 (시도 1/3): 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+2026-03-28 15:44:09,123 - EmailAssistantLogger - WARNING - 2초 후 재시도합니다.
+2026-03-28 15:44:11,124 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:44:12,376 - EmailAssistantLogger - ERROR - AI 통신 오류 (시도 2/3): 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+2026-03-28 15:44:12,378 - EmailAssistantLogger - WARNING - 4초 후 재시도합니다.
+2026-03-28 15:44:16,380 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:44:17,404 - EmailAssistantLogger - ERROR - AI 통신 오류 (시도 3/3): 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+2026-03-28 15:44:18,355 - EmailAssistantLogger - INFO - 텔레그램 알림 전송 완료! (메일번호 48861)
+2026-03-28 15:44:18,356 - EmailAssistantLogger - INFO - 장부 저장 완료: 'AI 오류' #1
+2026-03-28 15:44:57,993 - EmailAssistantLogger - INFO - 원격 메모가 성공적으로 노트에 추가되었습니다: ai서버 응답 오류 이유
+2026-03-28 15:45:18,370 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:45:18,939 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:45:19,161 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:46:19,173 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:46:19,643 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:46:19,922 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:47:19,913 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:47:20,419 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:47:20,642 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:48:20,669 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:48:21,476 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:48:21,672 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:49:21,681 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:49:22,254 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:49:22,671 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: RE: PRODUCTION SHEET: PS PO#G-3 / ABI
+2026-03-28 15:49:22,822 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:49:22,824 - EmailAssistantLogger - INFO - 앗! 주인님에게 1통의 새로운 중요한 이메일이 찾아왔습니다.
+2026-03-28 15:49:23,796 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:49:50,265 - EmailAssistantLogger - INFO - AI 분석 완료: status=알림, thread_key=PRODUCTION SHEET: PS PO#G-3 / ABI, index=4
+2026-03-28 15:49:51,133 - EmailAssistantLogger - INFO - 텔레그램 알림 전송 완료! (메일번호 48862)
+2026-03-28 15:49:51,136 - EmailAssistantLogger - INFO - 장부 저장 완료: 'PRODUCTION SHEET: PS PO#G-3 / ABI' #4
+2026-03-28 15:50:51,141 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:50:51,778 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:50:52,017 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:51:52,047 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:51:52,599 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:51:53,533 - EmailAssistantLogger - INFO - 새로운 메일을 안전하게 읽어왔습니다: PRODUCTION SHEET: PS PO#45457913 // RE: URGENT: PO #45457913 - Iwis Germany - Check leadtime for BL844
+2026-03-28 15:51:53,691 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:51:53,692 - EmailAssistantLogger - INFO - 앗! 주인님에게 1통의 새로운 중요한 이메일이 찾아왔습니다.
+2026-03-28 15:51:54,035 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:52:04,076 - EmailAssistantLogger - ERROR - AI 통신 오류 (시도 1/3): 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+2026-03-28 15:52:04,076 - EmailAssistantLogger - WARNING - 2초 후 재시도합니다.
+2026-03-28 15:52:06,077 - EmailAssistantLogger - INFO - AI 비서(Gemini)에게 이메일 분석을 요청합니다...
+2026-03-28 15:52:12,704 - EmailAssistantLogger - INFO - AI 분석 완료: status=알림, thread_key=URGENT: PO #45457913 - Iwis Germany - Check leadtime for BL844, index=3
+2026-03-28 15:52:13,815 - EmailAssistantLogger - INFO - 텔레그램 알림 전송 완료! (메일번호 48863)
+2026-03-28 15:52:13,817 - EmailAssistantLogger - INFO - 장부 저장 완료: 'URGENT: PO #45457913 - Iwis Germany - Check leadtime for BL844' #3
+2026-03-28 15:52:51,144 - EmailAssistantLogger - INFO - 텔레그램 봇 두뇌와 통신망을 열심히 뚝딱뚝딱 조립하고 있습니다...
+2026-03-28 15:52:51,533 - EmailAssistantLogger - INFO - 텔레그램 제어 수신기('/status', '/메모' 등)와 버튼 수신기가 메인 서버에 장착 완료되었습니다.
+2026-03-28 15:52:52,606 - EmailAssistantLogger - INFO - 모든 부품과 톱니바퀴 준비 완료! 파이프라인 공장이 24시간 쌩쌩 가동됩니다.
+2026-03-28 15:52:52,606 - EmailAssistantLogger - INFO - 지능형 이메일 비서가 눈을 번쩍 뜨고 24시간 철통 경계 및 업무를 시작합니다!
+2026-03-28 15:52:52,606 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:52:53,462 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:52:53,696 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:52:53,697 - EmailAssistantLogger - INFO - 이제부터 새로 도착하는 따끈따끈한 새 이메일만 감시하여 실시간으로 보고합니다.
+2026-03-28 15:53:53,716 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:53:54,182 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:53:54,428 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:57:45,398 - EmailAssistantLogger - INFO - 텔레그램 봇 두뇌와 통신망을 열심히 뚝딱뚝딱 조립하고 있습니다...
+2026-03-28 15:57:45,757 - EmailAssistantLogger - INFO - 텔레그램 제어 수신기('/status', '/메모' 등)와 버튼 수신기가 메인 서버에 장착 완료되었습니다.
+2026-03-28 15:57:46,655 - EmailAssistantLogger - INFO - 모든 부품과 톱니바퀴 준비 완료! 파이프라인 공장이 24시간 쌩쌩 가동됩니다.
+2026-03-28 15:57:46,655 - EmailAssistantLogger - INFO - 지능형 이메일 비서가 눈을 번쩍 뜨고 24시간 철통 경계 및 업무를 시작합니다!
+2026-03-28 15:57:46,655 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:57:47,338 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:57:47,668 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:57:47,669 - EmailAssistantLogger - INFO - 이제부터 새로 도착하는 따끈따끈한 새 이메일만 감시하여 실시간으로 보고합니다.
+2026-03-28 15:58:47,675 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:58:48,133 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:58:48,335 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 15:59:48,348 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 15:59:49,344 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 15:59:49,648 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 16:00:49,655 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 16:00:50,423 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 16:00:50,805 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 16:01:50,819 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 16:01:51,456 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 16:01:51,669 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 16:02:51,666 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 16:02:52,181 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 16:02:52,412 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 16:03:52,429 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 16:03:53,493 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 16:03:53,707 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 16:04:53,717 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 16:04:54,214 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 16:04:54,429 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 16:05:54,436 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 16:05:55,159 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 16:05:55,385 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 16:06:55,394 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 16:06:55,910 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 16:06:56,136 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 16:07:56,143 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 16:07:56,864 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 16:07:57,266 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.
+2026-03-28 16:08:57,285 - EmailAssistantLogger - INFO - 메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...
+2026-03-28 16:08:57,799 - EmailAssistantLogger - INFO - 메일 서버 안전하게 접속 성공 완료!
+2026-03-28 16:08:58,015 - EmailAssistantLogger - INFO - 메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.

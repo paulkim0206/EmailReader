@@ -19,7 +19,7 @@ def create_and_save_report(mail_data, ai_result):
     safe_title = "".join(c for c in raw_subject if c.isalnum() or c in (' ', '_', '-')).strip()
     
     short_date = mail_data.get('date', '날짜미상')[:10].replace(" ", "").replace("-", "") 
-    category = ai_result.get('category', '미분류')
+    category = ai_result.get('thread_key', '미분류')
     
     file_name = f"{short_date}_{category}_{safe_title[:20]}.md"
     file_path = os.path.join(SAVE_DIRECTORY_PATH, file_name)

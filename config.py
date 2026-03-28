@@ -24,14 +24,18 @@ SAVE_DIRECTORY_PATH = os.getenv("SAVE_DIRECTORY_PATH", os.path.join(BASE_DIR, "S
 
 # 텔레그램 메일 핑퐁(스레드) 추적 장부 설정
 THREAD_CACHE_FILE = os.path.join(BASE_DIR, "thread_memory.json")
-THREAD_MAX_SIZE = 2000     # 최대 스레드 기억 용량
-THREAD_TIMEOUT_DAYS = 90   # 90일 지난 대화는 타임아웃 리셋
+THREAD_MAX_SIZE = 2000     # 최대 스레드 기억 용량 (방 개수 기준)
+THREAD_TIMEOUT_DAYS = 30   # 30일 이상 소식 없는 방은 자동 삭제
 
 # 통합 백로그(아이디어/버그) 기록용 노트북 경로 세팅
 IDEA_NOTE_FILE = os.path.join(BASE_DIR, "아이디어노트.md")
 
 # 거머리(스팸) 발송자 영구 차단용 블랙리스트 장부 경로 세팅
 BLACKLIST_FILE = os.path.join(BASE_DIR, "blacklist.json")
+
+# AI 서버 장애 시 재시도 대기열 파일 경로 및 대기 시간 설정
+RETRY_QUEUE_FILE = os.path.join(BASE_DIR, "retry_queue.json")
+RETRY_WAIT_MINUTES = 5  # AI 6회 실패 후 재시도까지 기다리는 시간 (분)
 
 # AI 제미나이 맞춤형 진화용 '기피 메일 학습 노트' 경로 세팅
 USER_PREFERENCES_FILE = os.path.join(BASE_DIR, "user_preferences.json")
