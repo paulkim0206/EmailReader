@@ -1,17 +1,28 @@
-# 배포 및 빌드 관련 (안에 들어있는 커다란 파일들 제외)
-dist/
-build/
-
-# 환경 변수 및 비밀번호 (절대 깃허브에 올리면 안 됨)
+# [보안] 환경 변수 및 비밀번호
 .env
 
-# 파이썬 가상환경 및 캐시
+# [로그] 실행 기록 및 분석 로그
+app.log
+*.log
+
+# [데이터] 로컬 장부 및 처리 기록 (내 컴퓨터에만 유지)
+*.json
+!requirements.json
+!package.json
+
+# [보고서] 자동으로 생성된 메일 요약 보고서 폴더
+Email_Reports/
+Saved_Reports/
+
+# [빌드/배포] 실행 파일 및 빌드 폴더
+*.exe
+*.spec
+build/
+dist/
+
+# [파이썬 최적화] 가상환경 및 캐시
 .venv/
 __pycache__/
 *.pyc
-
-# 실행 로그 (계속 쌓이는 텍스트 파일)
-app.log
-
-# 사용자가 저장한 메일 보고서 (회사 기밀 유지)
-Saved_Reports/
+*.pyo
+.python-version
