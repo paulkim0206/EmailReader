@@ -1,6 +1,8 @@
 import imaplib
 import email
 from email.header import decode_header
+from email.utils import parsedate_to_datetime
+import datetime
 import json
 import os
 import re
@@ -78,8 +80,11 @@ def get_text_from_email(msg):
     
     # 일반 텍스트가 없고 HTML 글씨만 있다면, 불필요한 태그(<br>, <div> 등)를 전부 청소하여 글자만 추출합니다.
     elif html_content.strip():
-        soup = BeautifulSoup(html_content, "html.parser")
-        return soup.get_text(separator="\n").strip()
+        # BeautifulSoup 라이브러리 미설치 환경 대비 (순수 정규식으로 HTML 태그 싹둑 제거)
+        clean_text = re.sub(r'<[^>]+>', ' ', html_content)
+        # 과도한 공백 및 이스케이프 문자 정리
+        clean_text = re.sub(r'\s+', ' ', clean_text).replace('&nbsp;', ' ')
+        return clean_text.strip()
     
     return "본문 추출 불가 메일"
 
@@ -118,40 +123,26 @@ def decode_email_header(raw_header):
             result += decoded_string
     return result
 
-def clean_reply_history(text):
+def format_to_vietnam_time(raw_date_str):
     """
-    과거 답장 이력을 기계적으로 가위질하여 오직 '방금 새로 쳐진 알맹이 타자'만 쏙 빼냅니다.
+    뒤죽박죽인 전 세계 이메일 발송 시간(+0000, +0900 등)을 
+    사용자님이 계신 '베트남 표준시(GMT+7)'로 깔끔하게 통일시켜 줍니다!
     """
-    if not text:
-        return text
-    
-    # 전 세계 이메일 공통 구분선(Boundary) 암호들입니다.
-    patterns = [
-        # 1. 사용자님 회사 그룹웨어 전용 (가로/세로선 디자인 안쪽의 순수 텍스트 헤더)
-        r"(?im)^(일자|Date|날짜)\s*:.*?\nFrom\s*:.*?\nTo\s*:",
-        r"(?im)^From\s*:.*?\n(?:Sent|Date|일자|날짜)\s*:.*?\nTo\s*:",
-        
-        # 2. 일반 상용 메일 공통 (아웃룩, 지메일, 아이폰)
-        r"(?i)-{3,}\s*(Original Message|원\s*본\s*메\s*시\s*지)\s*-{3,}",
-        r"(?im)^On\s+.*?(?:wrote|작성|보냈습니다)\s*:$",
-        r"(?im)^보낸\s*사람\s*:.*?\n보낸\s*날짜\s*:.*?\n받는\s*사람\s*:",
-        r"(?im)^\s*>\s*.*$",
-        r"(?im)^20\d{2}[\.\-년]\s*\d{1,2}[\.\-월]\s*\d{1,2}[\.\-일].*?작성\s*:$"
-    ]
-    
-    min_index = len(text)
-    for p in patterns:
-        match = re.search(p, text)
-        if match:
-            if match.start() < min_index:
-                min_index = match.start()
-                
-    if min_index < len(text):
-        new_text = text[:min_index].strip()
-        if new_text:
-            return new_text
-            
-    return text.strip()
+    if not raw_date_str:
+        return "시간 정보 없음"
+    try:
+        # 이메일 표준 시간(텍스트)을 진짜 파이썬 시계 객체로 변환합니다.
+        dt = parsedate_to_datetime(raw_date_str)
+        # 베트남 시차(UTC+7)를 설정합니다.
+        vn_tz = datetime.timezone(datetime.timedelta(hours=7))
+        vn_dt = dt.astimezone(vn_tz)
+        # 예쁘게 출력: "2026-03-28 11:46 (베트남 시간)"
+        return vn_dt.strftime("%Y-%m-%d %H:%M (베트남 시간)")
+    except Exception as e:
+        logger.error(f"시간 포맷 변환 실패, 원본 유지. 오류: {e}")
+        return decode_email_header(raw_date_str)
+
+
 
 def fetch_unseen_emails():
     """
@@ -199,18 +190,16 @@ def fetch_unseen_emails():
 
             subject = decode_email_header(msg.get("Subject"))
             sender = decode_email_header(msg.get("From"))
-            date = decode_email_header(msg.get("Date"))
+            date = format_to_vietnam_time(msg.get("Date")) # 베트남 시간으로 강제 변환!
             body = get_text_from_email(msg)
-            new_body = clean_reply_history(body)
 
-            # 분석을 위해 예쁘게 한 바구니에 담아 놓습니다.
+            # 분석을 위해 예쁘게 한 바구니에 담아 놓습니다. (가위질 제거! 100% 원문만 보냅니다)
             fetched_emails.append({
                 "uid": uid,
                 "subject": subject,
                 "sender": sender,
                 "date": date,
-                "body": body,        # 전체 과거 이력 포함
-                "new_body": new_body # 싹둑 자른 방금 쓴 새 내용
+                "body": body
             })
             
             logger.info(f"새로운 메일을 안전하게 읽어왔습니다: {subject}")

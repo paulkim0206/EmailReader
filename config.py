@@ -27,6 +27,15 @@ THREAD_CACHE_FILE = os.path.join(BASE_DIR, "thread_memory.json")
 THREAD_MAX_SIZE = 2000     # 최대 스레드 기억 용량
 THREAD_TIMEOUT_DAYS = 90   # 90일 지난 대화는 타임아웃 리셋
 
+# 통합 백로그(아이디어/버그) 기록용 노트북 경로 세팅
+IDEA_NOTE_FILE = os.path.join(BASE_DIR, "아이디어노트.md")
+
+# 거머리(스팸) 발송자 영구 차단용 블랙리스트 장부 경로 세팅
+BLACKLIST_FILE = os.path.join(BASE_DIR, "blacklist.json")
+
+# AI 제미나이 맞춤형 진화용 '기피 메일 학습 노트' 경로 세팅
+USER_PREFERENCES_FILE = os.path.join(BASE_DIR, "user_preferences.json")
+
 # 전역 로거(Logger) 설정 함수
 def setup_logger():
     # 로거 인스턴스 생성

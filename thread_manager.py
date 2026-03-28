@@ -59,18 +59,32 @@ def get_or_create_thread(subject):
         threads[base_subj] = {
             "count": 1,
             "msg_id": None,
-            "last_date": now_str
+            "last_date": now_str,
+            "summary_history": []
         }
         t_data = threads[base_subj]
         
+    save_threads(threads) # [치명적 버그 수정] 지금까지 장부에 적어만 놓고 디스크 저장을 누락했던 코드 추가!
     return base_subj, t_data
 
 def update_thread_data(base_subj, msg_id=None, latest_summary=None):
-    """텔레그램 말풍선 번호와, AI가 방금 만들어낸 요약본을 장부에 확정 저장합니다."""
+    """텔레그램 말풍선 번호와, AI가 방금 만들어낸 요약본을 누적 장부에 확정 저장합니다."""
     threads = load_threads()
-    if base_subj in threads:
-        if msg_id is not None:
-            threads[base_subj]["msg_id"] = msg_id
-        if latest_summary is not None:
-            threads[base_subj]["latest_summary"] = latest_summary
-        save_threads(threads)
+    
+    # [치명적 버그 수정] 혹시라도 메모리에서 증발했다면 다시 빈 방을 무조건 만들어 줍니다.
+    if base_subj not in threads:
+        threads[base_subj] = {
+            "count": 1,
+            "msg_id": None,
+            "last_date": datetime.datetime.now().isoformat(),
+            "summary_history": []
+        }
+        
+    if msg_id is not None:
+        threads[base_subj]["msg_id"] = msg_id
+    if latest_summary is not None:
+        if "summary_history" not in threads[base_subj]:
+            threads[base_subj]["summary_history"] = []
+        threads[base_subj]["summary_history"].append(latest_summary)
+        
+    save_threads(threads)

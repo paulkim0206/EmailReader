@@ -6,9 +6,8 @@ import os
 import sys
 import ctypes
 
-# PyInstaller가 백엔드 의존성을 놓치지 않고 1개의 실행파일에 쓸어담기 위해 상단에서 임포트합니다.
-import asyncio
-import main 
+# V1.8.0 분리 고도화! 이제 백엔드 라이브러리를 임포트하지 않습니다. 
+# GUI(Tkinter)는 오직 가벼운 껍데기 역할만 수행하게 됩니다.
 
 try:
     # 모니터 해상도 배율에 맞춰 글씨가 깨지지 않고 선명하게 보이도록 강제합니다.
@@ -85,18 +84,16 @@ class EmailHelperGUI:
         env = os.environ.copy()
         env["EMAIL_ADDRESS"] = email
         env["EMAIL_PASSWORD"] = pwd
+        env["PYTHONIOENCODING"] = "utf-8" # 윈도우 파이썬 터미널 한글 깨짐(외계어) 현상 완벽 방어!
         
         startupinfo = None
         if os.name == 'nt':
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
-        if getattr(sys, 'frozen', False):
-            # 사용자가 exe로 더블클릭 실행한 최종 배포본일 경우, 자기 자신(exe)을 투명하게 다시 켜서 봇으로 부립니다.
-            cmd = [sys.executable, "--daemon"]
-        else:
-            # 파이썬 코드로 테스트 실행 중인 경우
-            cmd = [sys.executable, "-u", sys.argv[0], "--daemon"]
+        # V1.8.0 분리 고도화 핵심: 이제 EXE가 스스로를 복제하지 않습니다!
+        # 단순히 윈도우 파이썬 명령어로 백그라운드에서 `python run_server.py`를 몰래 타이핑시켜주는 리모컨 역할을 합니다.
+        cmd = ["python", "-u", "run_server.py"]
 
         self.process = subprocess.Popen(
             cmd,
@@ -150,17 +147,7 @@ class EmailHelperGUI:
         self.pwd_entry.config(state="normal")
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--daemon":
-        # GUI의 [시작] 버튼이 눌려, 눈에 보이지 않는 백그라운드 봇이 구동된 상태입니다.
-        if os.name == 'nt':
-            asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-        try:
-            asyncio.run(main.main())
-        except KeyboardInterrupt:
-            pass
-        sys.exit(0)
-    else:
-        # 바탕화면에서 프로그램 아이콘을 더블클릭해서 일반 실행한 상태입니다.
-        root = tk.Tk()
-        app = EmailHelperGUI(root)
-        root.mainloop()
+    # V1.8.0 부터는 프로그램(.exe)이 실행되면 무조건 투명창 대신 순수하게 화면(리모컨)만 눈앞에 그려냅니다.
+    root = tk.Tk()
+    app = EmailHelperGUI(root)
+    root.mainloop()

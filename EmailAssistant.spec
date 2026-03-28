@@ -29,7 +29,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='EmailAssistant_v1.6.0',
+    name='EmailController_v1.8.0',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

@@ -37,12 +37,22 @@ async def background_mail_checker(application: Application):
             if unseen_emails:
                 logger.info(f"앗! 주인님에게 {len(unseen_emails)}통의 새로운 중요한 이메일이 찾아왔습니다.")
                 
+            from blacklist_manager import load_blacklist, extract_pure_email
+            current_blacklist = load_blacklist()
+
             for mail_data in unseen_emails:
+                # 🚫 [문지기 신설] 편지 봉투에 적힌 보낸 사람이 우리가 못 들어오게 막은 스팸 발송자인지 검열합니다.
+                pure_sender = extract_pure_email(mail_data.get('sender', ''))
+                if pure_sender in current_blacklist:
+                    logger.info(f"🚫 [사전 차단 작동] 아하! 이 녀석({pure_sender})은 블랙리스트에 걸렸군요. AI를 깨우지 않고 편지를 바로 휴지통에 꽂아버립니다.")
+                    save_processed_uid(mail_data['uid'])
+                    continue
+
                 # 2. 이번 메일이 어떤 핑퐁(스레드)방에 속하는지 기억 장부에서 찾고 카운트를 셉니다.
                 base_subj, t_data = get_or_create_thread(mail_data["subject"])
                 
-                # 3. 핑퐁 카운트와 '이전 대화 요약본'을 AI에게 넘겨줘서 문맥을 이해시킵니다.
-                ai_result = process_email_with_ai(mail_data, t_data["count"], t_data.get("latest_summary", ""))
+                # 3. 핑퐁 카운트와 '누적 요약망(이전 대화 전체 리스트)'을 AI에게 주입해 문맥을 100% 이해시킵니다.
+                ai_result = process_email_with_ai(mail_data, t_data["count"], t_data.get("summary_history", []))
                 
                 # [아이디어 노트 반영] 카테고리가 '스킵'으로 분류된 단순 인사/단답 메일은 알림을 보내지 않고 무시합니다.
                 if ai_result.get('category', '') == '스킵':

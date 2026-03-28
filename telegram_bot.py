@@ -1,7 +1,10 @@
 import asyncio
+import html
+import re
+import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, CommandHandler
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, IDEA_NOTE_FILE
 from local_storage import create_and_save_report
 
 # 전 세계의 모든 사용자 중, 오직 '나(등록된 소유자)'에게만 알림을 보내고 명령을 받기 위한 검증용 정보입니다.
@@ -12,8 +15,6 @@ ALLOWED_CHAT_ID = str(TELEGRAM_CHAT_ID)
 # 나중에 유저가 텔레그램 버튼으로 "이거 저장해줘!" 라고 할 때 여기서 꺼내다 씁니다.
 # (컴퓨터를 끄면 상자가 비워지는 임시 보관소라 용량 걱정은 전혀 없습니다.)
 temp_mail_cache = {}
-
-import html
 
 def escape_for_tg(text):
     """
@@ -60,11 +61,13 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
         for i, chunk in enumerate(message_chunks):
             reply_markup = None
             
-            # 여러 개의 쪼개진 편지가 왔을 때, 마지막 장 맨 아랫부분 바닥에만 [저장 버튼]을 딱 붙여줍니다.
+            # 여러 개의 쪼개진 편지가 왔을 때, 마지막 장 맨 아랫부분 바닥에만 버튼을 달아줍니다.
             if i == len(message_chunks) - 1:
-                # 사용자가 손가락으로 누르면 "save_<고유번호>" 라는 암호 신호를 봇에게 말없이 튕겨줍니다.
+                # 사용자가 버튼을 누르면 "save_<고유번호>" 또는 "block_<고유번호>" 란 암호 신호를 튕깁니다!
                 keyboard = [
-                    [InlineKeyboardButton("💾 이 내용 전체를 깨짐 없는 마크다운(.md) 문서로 저장하기", callback_data=f"save_{uid}")]
+                    [InlineKeyboardButton("💾 마크다운(.md) 문서로 저장하기", callback_data=f"save_{uid}")],
+                    [InlineKeyboardButton("🚫 이 보낸 사람 블랙리스트 차단 (스팸 등록)", callback_data=f"block_{uid}")],
+                    [InlineKeyboardButton("👎 이런 류의 메일 내용 요약 제외 (AI 학습)", callback_data=f"learn_{uid}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -98,7 +101,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     # 버튼 뒤에 숨겨두었던 암호문 (예: 'save_10번편지')을 가져옵니다.
     data = query.data
     
-    # 보안 통과 검사: 암호문이 'save_'로 시작할 때만 동작합니다.
+    # 보안 통과 검사: 암호문에 맞게 분기 처리합니다.
     if data.startswith("save_"):
         uid = data.split("_")[1]
         
@@ -127,15 +130,112 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
                 chat_id=query.message.chat_id,
                 text="⚠️ 해당 메일 내용이 컴퓨터의 단기 기억 용량에서 이미 지워졌습니다. (오래된 메일이거나 재부팅됨)"
             )
+            
+    # [새로운 분기 기능] 사용자가 블랙리스트 버튼을 눌렀을 때!!
+    elif data.startswith("block_"):
+        uid = data.split("_")[1]
+        cache_data = temp_mail_cache.get(uid)
+
+        if cache_data:
+            from blacklist_manager import add_to_blacklist
+            sender = cache_data["mail"].get('sender', '')
+            success, result_msg = add_to_blacklist(sender)
+
+            if success:
+                # 차단이 성공하면 앗! 차단이 완료되었다는 안내와 함께 기존 버튼 판을 아예 엎어버립니다. (중복 방지)
+                await query.edit_message_reply_markup(reply_markup=None) 
+                
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"🚨 탕탕! 블랙리스트 확정!\n이제 [{result_msg}] 놈이 보내는 모든 이메일은 가차 없이 파이썬 문지기가 찢어버릴 것입니다!!"
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"⚠️ 이미 지옥(블랙리스트)에 간 녀석이거나 주소를 잡을 수 없습니다: {result_msg}"
+                )
+        else:
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="⚠️ 해당 메일 내용이 이미 옛날 것이라 차단할 주소록을 분실했습니다."
+            )
+            
+    # [새로운 분기 3] 사용자가 AI 학습(👎) 단추를 눌렀을 때!!
+    elif data.startswith("learn_"):
+        uid = data.split("_")[1]
+        cache_data = temp_mail_cache.get(uid)
+        
+        if cache_data:
+            from feedback_manager import add_learning_preference
+            subject = cache_data["mail"].get("subject", "제목 없음")
+            summary = cache_data["ai"].get("summary", "데이터 없음")
+            
+            success, msg = add_learning_preference(subject, summary)
+            
+            if success:
+                # 사용자가 또 광클릭 못하게 기존의 모든 메뉴판(버튼들)을 싹 날려줍니다.
+                await query.edit_message_reply_markup(reply_markup=None) 
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text="✅ 기특한 제미나이(AI)가 이 메일의 패턴을 머릿속에 완벽히 암기했습니다!\n다음에 이와 비슷한 내용 혹은 형식의 메일이 오면 사용자님을 귀찮게 하지 않고 스스로 알아서 [스킵]하겠습니다. 🧠✨"
+                )
+            else:
+                await context.bot.send_message(
+                    chat_id=query.message.chat_id,
+                    text=f"⚠️ {msg}"
+                )
+        else:
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="⚠️ 해당 메일 내용이 이미 옛날 것이라 파이썬이 내용을 까먹었습니다."
+            )
+
 
 async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
     await update.message.reply_text("✅ 🤖 비서 봇이 정상적으로 살아있으며, 열심히 메일을 감시하고 있습니다!")
 
+async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    사용자가 '/note' 또는 '/메모' 명령어로 보낸 알맹이 텍스트만 빼내어 아이디어노트.md 파일 하단에 영구 누적 기록(Append)합니다.
+    """
+    # 1. 철통 보안 통과 검사 (사용자 본인, 즉 주인님만 쓸 수 있게 차단)
+    chat_id = str(update.message.chat_id)
+    if chat_id != ALLOWED_CHAT_ID:
+        return
+
+    text = update.message.text
+    # 2. 명령어 껍데기('/note ')를 정규식 가위로 강제로 잘라냅니다.
+    memo_content = re.sub(r'^/note\s*', '', text, flags=re.IGNORECASE).strip()
+
+    # 빈 내용 방어
+    if not memo_content:
+        await update.message.reply_text("🤔 사장님! 내용을 명령어 뒤에 띄어쓰고 같이 적어주세요!\n👉 예시: /note 🐛버그: 텔레그램 버튼 안 눌림")
+        return
+
+    try:
+        # 3. 파이썬 시계로 현재 시각 도장 생성
+        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        # 4. 파일 제일 밑(바닥)에 한 줄씩 이어붙이기(Append) 모드인 'a' 로 엽니다. 
+        # (절대 'w'로 열면 안 됩니다. 기존 내용이 통째로 엎어(날아감)집니다!)
+        with open(IDEA_NOTE_FILE, "a", encoding="utf-8") as f:
+            f.write(f"\n- **[{now_str}]** {memo_content}")
+            
+        logger.info(f"원격 메모가 성공적으로 노트에 추가되었습니다: {memo_content}")
+        # 5. 등록 성공 콜백 알림 전송 (안심 효과)
+        await update.message.reply_text(f"📝 훌륭한 메모입니다! 데스크톱 장부(`아이디어노트.md`) 최하단에 안전하게 영구 누적 기록해 두었습니다!\n\n[기록된 내용]\n{memo_content}")
+        
+    except Exception as e:
+        logger.error(f"메모 기록 중 치명적인 에러 발생: {e}")
+        await update.message.reply_text("🚨 앗! 하드디스크에 메모를 찍으려고 했는데 오류가 발생했습니다. 나중에 다시 시도해 주세요.")
+
 def setup_telegram_handlers(application: Application):
-    """
-    텔레그램 봇의 인공지능 두뇌에 "만약 화면의 버튼이 눌리면 이렇게 대응해라~" 고 
-    가이드라인(동작 감지기)을 등록시켜 주는 연결 장치입니다.
-    """
-    application.add_handler(CallbackQueryHandler(handle_button_callback))
+    # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note' 옵션을 박아 넣습니다.
     application.add_handler(CommandHandler("status", command_status))
+    application.add_handler(CommandHandler("note", handle_memo_command))
+    
+    # 인라인 버튼(문서 저장 등) 콜백 처리를 위한 리스너입니다.
+    application.add_handler(CallbackQueryHandler(handle_button_callback))
+    
+    logger.info("텔레그램 제어 수신기('/status', '/메모' 등)와 버튼 수신기가 메인 서버에 장착 완료되었습니다.")
