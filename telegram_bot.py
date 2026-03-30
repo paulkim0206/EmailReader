@@ -280,6 +280,55 @@ async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
     await update.message.reply_text("✅ 🤖 비서 봇이 정상적으로 살아있으며, 열심히 메일을 감시하고 있습니다!")
 
+async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V3.7 기계식 매뉴얼 뱉기] 
+    부장님이 '/help'나 '/명령어'를 치면 제미나이(AI)는 쳐다도 안 보고 파이썬 서버가 즉각 매뉴얼 파일 텍스트를 기계적으로 출력합니다.
+    """
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
+    
+    import os
+    try:
+        # 단일 소스 원칙에 따라 telegram_commands.txt 파일을 그대로 읽어서 뱉습니다.
+        prompt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts", "telegram_commands.txt")
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            manual_text = f.read()
+        await update.message.reply_text(f"🤖 [기계식 봇 매뉴얼 출력]\n\n{manual_text}")
+    except Exception as e:
+        await update.message.reply_text("🚨 매뉴얼 파일을 찾을 수 없습니다.")
+
+async def handle_export_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V4.2] 부장님의 명령('/수첩')에 의해 1번부터 끝번까지의 전체 메모 장부(JSON 파싱 텍스트)를 배달합니다.
+    데이터가 길 수 있으므로 깔끔하게 파일(Document) 형태로 전송합니다.
+    """
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
+    
+    from memo_manager import get_all_memos
+    from config import USER_NOTES_FILE
+    import tempfile
+    
+    all_notes_text = get_all_memos()
+    
+    # 텔레그램 한도 초과 방지 및 가독성을 위해 텍스트 파일로 뽑아서 발송합니다.
+    try:
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.txt', encoding='utf-8') as tmp:
+            tmp.write("====== [부장님의 전체 공용 수첩(JSON) 다운로드 원본] ======\n\n")
+            tmp.write(all_notes_text)
+            tmp_path = tmp.name
+            
+        with open(tmp_path, 'rb') as f:
+            await context.bot.send_document(
+                chat_id=update.message.chat_id,
+                document=f,
+                filename=f"수첩_전체백업_{datetime.datetime.now().strftime('%Y%m%d')}.txt",
+                caption="🗄️ 부장님! [1번]부터 끝번까지 기록된 수첩 전체 원본(DB)을 배달해 드립니다!"
+            )
+        import os
+        os.unlink(tmp_path)
+    except Exception as e:
+        await update.message.reply_text(f"🚨 수첩 파일 배달 중 오류: {e}")
+
 async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     사용자가 '/note' 또는 '/메모' 명령어로 보낸 알맹이 텍스트만 빼내어 아이디어노트.md 파일 하단에 영구 누적 기록(Append)합니다.
@@ -298,17 +347,17 @@ async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     try:
-        # 3. 파이썬 시계로 현재 시각 도장 생성
-        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        # [V4.0] 새로운 공용 수첩(JSON) 관리자를 불러와 메모를 넘깁니다.
+        from memo_manager import save_memo
         
-        # 4. 파일 제일 밑(바닥)에 한 줄씩 이어붙이기(Append) 모드인 'a' 로 엽니다. 
-        # (절대 'w'로 열면 안 됩니다. 기존 내용이 통째로 엎어(날아감)집니다!)
-        with open(IDEA_NOTE_FILE, "a", encoding="utf-8") as f:
-            f.write(f"\n- **[{now_str}]** {memo_content}")
-            
-        logger.info(f"원격 메모가 성공적으로 노트에 추가되었습니다: {memo_content}")
-        # 5. 등록 성공 콜백 알림 전송 (안심 효과)
-        await update.message.reply_text(f"📝 훌륭한 메모입니다! 데스크톱 장부(`아이디어노트.md`) 최하단에 안전하게 영구 누적 기록해 두었습니다!\n\n[기록된 내용]\n{memo_content}")
+        success = save_memo(memo_content)
+        
+        if success:
+            logger.info(f"원격 메모가 성공적으로 노트에 추가되었습니다: {memo_content}")
+            # 5. 등록 성공 콜백 알림 전송 (안심 효과)
+            await update.message.reply_text(f"📝 훌륭한 메모입니다! [공용 수첩(user_notes.json)]에 안전하게 영구 기록해 두었습니다!\n\n[기록된 내용]\n{memo_content}")
+        else:
+            await update.message.reply_text("🚨 앗! 수첩(JSON)에 메모를 적다가 펜이 부러졌습니다. 서버 상태를 확인해 주세요.")
         
     except Exception as e:
         logger.error(f"메모 기록 중 치명적인 에러 발생: {e}")
@@ -389,6 +438,38 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
             ai_reply = re.sub(r'\[\[LEARN\]\].*?\[\[/LEARN\]\]', '', ai_reply, flags=re.DOTALL).strip()
             ai_reply += f"\n\n*(✅ 비서가 방금 지적하신 내용을 오답 노트 장부에 영구 기록하여 학습했습니다!)*"
 
+        # [V4.0 코어 기능 2/2] AI가 스스로 부장님의 메모 지시를 눈치채고 던진 수첩 기록 태그 가로채기!
+        memo_match = re.search(r'\[\[SAVE_MEMO\]\](.*?)\[\[/SAVE_MEMO\]\]', ai_reply, re.DOTALL)
+        if memo_match:
+            memo_text = memo_match.group(1).strip()
+            from memo_manager import save_memo
+            save_memo(memo_text)
+            ai_reply = re.sub(r'\[\[SAVE_MEMO\]\].*?\[\[/SAVE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
+
+        # [V4.2] 삭제 명령 (DELETE_MEMO) 가로채기
+        del_match = re.search(r'\[\[DELETE_MEMO\]\](.*?)\[\[/DELETE_MEMO\]\]', ai_reply, re.DOTALL)
+        if del_match:
+            try:
+                target_id = int(del_match.group(1).strip())
+                from memo_manager import delete_memo
+                delete_memo(target_id)
+            except ValueError: pass
+            ai_reply = re.sub(r'\[\[DELETE_MEMO\]\].*?\[\[/DELETE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
+
+        # [V4.2] 수정 명령 (UPDATE_MEMO) 가로채기
+        upd_match = re.search(r'\[\[UPDATE_MEMO\]\](.*?)\[\[/UPDATE_MEMO\]\]', ai_reply, re.DOTALL)
+        if upd_match:
+            payload = upd_match.group(1).strip()
+            if "|" in payload:
+                try:
+                    parts = payload.split('|', 1)
+                    target_id = int(parts[0].strip())
+                    new_content = parts[1].strip()
+                    from memo_manager import update_memo
+                    update_memo(target_id, new_content)
+                except ValueError: pass
+            ai_reply = re.sub(r'\[\[UPDATE_MEMO\]\].*?\[\[/UPDATE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
+
         # 만들어진 최종 답변을 텔레그램으로 보냅니다.
         await update.message.reply_text(ai_reply)
         
@@ -401,6 +482,11 @@ def setup_telegram_handlers(application: Application):
     application.add_handler(CommandHandler("status", command_status))
     application.add_handler(CommandHandler("note", handle_memo_command))
     application.add_handler(CommandHandler("update", handle_update_command))
+    application.add_handler(CommandHandler("help", handle_help_command))
+    application.add_handler(CommandHandler("명령어", handle_help_command))
+    application.add_handler(CommandHandler("수첩", handle_export_notes))
+    application.add_handler(CommandHandler("장부", handle_export_notes))
+    application.add_handler(CommandHandler("notelist", handle_export_notes))
     
     # 인라인 버튼(문서 저장 등) 콜백 처리를 위한 리스너입니다.
     application.add_handler(CallbackQueryHandler(handle_button_callback))

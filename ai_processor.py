@@ -136,19 +136,21 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
 
     # [V3.3] 채팅 시에는 피아니 페르소나 텍스트 파일만 깔끔하게 불러와서 뇌에 덮어씌웁니다.
     chat_prompt = load_prompt("peani_persona.txt")
+    
+    # [V3.7 듀얼 마스터] 평범한 일상 대화 시에도 자신이 할 수 있는 진짜 "기계적 명령어" 한계를 명확히 인식하도록 매뉴얼을 주입합니다.
+    chat_prompt += "\n\n" + load_prompt("telegram_commands.txt")
+    
+    # [V4.2 코어 기능] 부장님 지시: 이전 기억(메모)들을 10건(최신 역순)으로 확장하여 머릿속에 '최근 수첩'을 꽂아줍니다!
+    from memo_manager import get_recent_memos
+    memo_prompt = load_prompt("memo_instruction.txt")
+    recent_memos_text = get_recent_memos(limit=10)
+    
+    chat_prompt += "\n\n" + memo_prompt + f"\n\n[부장님의 공용 수첩(user_notes.json) 최근 10건 고유 ID 기록]\n{recent_memos_text}"
 
-    # [V3.2] 부장님이 답장(피드백)을 보낸 경우의 특수 임무 부여
+# [V3.6 버그 수정 및 리팩토링] 부장님이 답장을 보낸 경우, 미리 분리해 둔 특수 임무(reply_mission)를 뇌에 추가합니다.
     if replied_text:
-        chat_prompt += f"""
-\n\n[특수 임무: 요약 피드백 교정 추출]
-부장님이 당신의 과거 요약 메시지에 '답장'을 달아서 오류(수신자/발신자 오인, 오타 등)를 지적했습니다.
-- 과거 요약 메시지: "{replied_text[:300]}..."
-
-당신은 부장님의 지적을 받고 1) 정중히 사과하고 앞으로 주의하겠다고 짧게 답변하십시오.
-2) 부장님의 지적 내용에서 당신이 **미래의 모든 요약 작업에서 반드시 지켜야 할 '일반적인 규칙(오답 노트)' 한 줄**을 추출하십시오.
-3) 당신의 사과 답변 맨 끝에, 반드시 추출한 규칙을 아래 태그로 감싸서 출력하십시오.
-형식: [[LEARN]] 추출된 일반 교정 규칙 한 줄 [[/LEARN]]
-예시: [[LEARN]] A대리가 아니라 A팀장으로 직급을 표기할 것 [[/LEARN]]"""
+        mission_text = load_prompt("reply_mission.txt")
+        chat_prompt += "\n\n" + mission_text.format(replied_text=replied_text[:300])
 
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)

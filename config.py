@@ -27,8 +27,11 @@ THREAD_CACHE_FILE = os.path.join(BASE_DIR, "thread_memory.json")
 THREAD_MAX_SIZE = 2000     # 최대 스레드 기억 용량 (방 개수 기준)
 THREAD_TIMEOUT_DAYS = 30   # 30일 이상 소식 없는 방은 자동 삭제
 
-# 통합 백로그(아이디어/버그) 기록용 노트북 경로 세팅
+# 통합 백로그(아이디어/버그) 기록용 기존 데스크톱 노트북 경로 (레거시)
 IDEA_NOTE_FILE = os.path.join(BASE_DIR, "아이디어노트.md")
+
+# [V4.0] 제미나이와 파이썬이 함께 사용하는 지능형 공용 수첩 (JSON Database)
+USER_NOTES_FILE = os.path.join(BASE_DIR, "data", "user_notes.json")
 
 # 거머리(스팸) 발송자 영구 차단용 블랙리스트 장부 경로 세팅
 BLACKLIST_FILE = os.path.join(BASE_DIR, "blacklist.json")
