@@ -483,9 +483,6 @@ def setup_telegram_handlers(application: Application):
     application.add_handler(CommandHandler("note", handle_memo_command))
     application.add_handler(CommandHandler("update", handle_update_command))
     application.add_handler(CommandHandler("help", handle_help_command))
-    application.add_handler(CommandHandler("명령어", handle_help_command))
-    application.add_handler(CommandHandler("수첩", handle_export_notes))
-    application.add_handler(CommandHandler("장부", handle_export_notes))
     application.add_handler(CommandHandler("notelist", handle_export_notes))
     
     # 인라인 버튼(문서 저장 등) 콜백 처리를 위한 리스너입니다.
