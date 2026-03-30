@@ -65,6 +65,12 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False)
             logger.error(f"학습 노트를 불러오는 중 오류 발생: {e}")
             pass
 
+    # [V4.4] 이메일 분석 시에도 현재 날짜를 주입하여 날짜 판단 오류를 방지합니다.
+    import datetime
+    now = datetime.datetime.now()
+    current_time_info = f"\n\n[현재 시간 자각 지침]\n오늘의 날짜와 요일은 {now.strftime('%Y-%m-%d (%A)')} 입니다. 이 시간을 기준으로 메일의 '날짜'가 오늘 기준 어제의 일인지, 미래의 일인지 정확히 판단하십시오."
+    dynamic_prompt += current_time_info
+
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
     except Exception as e:
@@ -140,11 +146,16 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
     # [V3.7 듀얼 마스터] 평범한 일상 대화 시에도 자신이 할 수 있는 진짜 "기계적 명령어" 한계를 명확히 인식하도록 매뉴얼을 주입합니다.
     chat_prompt += "\n\n" + load_prompt("telegram_commands.txt")
     
-    # [V4.2 코어 기능] 부장님 지시: 이전 기억(메모)들을 10건(최신 역순)으로 확장하여 머릿속에 '최근 수첩'을 꽂아줍니다!
-    from memo_manager import get_recent_memos
-    memo_prompt = load_prompt("memo_instruction.txt")
-    recent_memos_text = get_recent_memos(limit=10)
+    # [V5.0 장기 기억 장착] 피아니가 부장님과의 대화 흐름을 잊지 않도록 최근 20마디 대화 맥락을 주입합니다.
+    from chat_manager import get_recent_chat_context
+    chat_context = get_recent_chat_context(limit=20)
     
+    # [V4.4] AI에게 현재 시간을 알려주어 '2024년'으로 착각하는 오류를 방지합니다.
+    import datetime
+    now = datetime.datetime.now()
+    current_time_info = f"\n\n[현재 시간 자각 지침]\n오늘의 날짜와 시간은 {now.strftime('%Y-%m-%d %H:%M:%S')} 입니다. 이 시간을 기준으로 모든 대화와 일정을 판단하십시오."
+    
+    chat_prompt = chat_prompt + current_time_info + "\n\n" + chat_context
     chat_prompt += "\n\n" + memo_prompt + f"\n\n[부장님의 공용 수첩(user_notes.json) 최근 10건 고유 ID 기록]\n{recent_memos_text}"
 
 # [V3.6 버그 수정 및 리팩토링] 부장님이 답장을 보낸 경우, 미리 분리해 둔 특수 임무(reply_mission)를 뇌에 추가합니다.
