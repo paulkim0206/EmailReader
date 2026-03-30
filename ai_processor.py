@@ -152,14 +152,24 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
         chat_context = get_recent_chat_context(limit=20)
     except Exception:
         chat_context = ""
-    
+
+    # [V4.2] 메모 지시사항 및 최근 수첩 내용을 불러옵니다.
+    try:
+        from memo_manager import get_recent_memos
+        memo_prompt = load_prompt("memo_instruction.txt")
+        recent_memos_text = get_recent_memos(limit=10)
+    except Exception:
+        memo_prompt = ""
+        recent_memos_text = ""
+
     # [V4.4] AI에게 현재 시간을 알려주어 '2024년'으로 착각하는 오류를 방지합니다.
     import datetime
     now = datetime.datetime.now()
     current_time_info = f"\n\n[현재 시간 자각 지침]\n오늘의 날짜와 시간은 {now.strftime('%Y-%m-%d %H:%M:%S')} 입니다. 이 시간을 기준으로 모든 대화와 일정을 판단하십시오."
-    
+
     chat_prompt = chat_prompt + current_time_info + "\n\n" + chat_context
-    chat_prompt += "\n\n" + memo_prompt + f"\n\n[부장님의 공용 수첩(user_notes.json) 최근 10건 고유 ID 기록]\n{recent_memos_text}"
+    if memo_prompt:
+        chat_prompt += "\n\n" + memo_prompt + f"\n\n[부장님의 공용 수첩(user_notes.json) 최근 10건 고유 ID 기록]\n{recent_memos_text}"
 
 # [V3.6 버그 수정 및 리팩토링] 부장님이 답장을 보낸 경우, 미리 분리해 둔 특수 임무(reply_mission)를 뇌에 추가합니다.
     if replied_text:
@@ -179,5 +189,8 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
         )
         return response.text
     except Exception as e:
-        logger.error(f"대화 처리 중 오류: {e}")
-        return "🚨 앗, 부장님! 방금 머리가 좀 아파서(서버 오류) 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?"
+        error_msg = str(e)
+        logger.error(f"피아니 대화 처리 오류: {error_msg}")
+        if "API key" in error_msg or "INVALID_ARGUMENT" in error_msg:
+            return f"🚨 API 키 오류가 발생했습니다. 서버 .env 파일의 GEMINI_API_KEY를 확인해 주세요.\n상세: {error_msg[:100]}"
+        return f"🚨 앗, 부장님! 방금 머리가 좀 아파서(서버 오류) 말씀을 제대로 못 들었습니다.\n오류: {error_msg[:80]}"
