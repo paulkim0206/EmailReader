@@ -22,6 +22,7 @@ SYSTEM_PROMPT = """
 반드시 아래 JSON 형식만 반환하십시오:
 {
     "status": "'알림' 또는 '스킵'",
+    "skip_reason": "스킵 시 그 이유를 한국어로 한 문장 작성 (알림일 경우 빈 문자열)",
     "is_thread": "true 또는 false (핑퐁 여부)",
     "thread_key": "연결된 주제명 또는 새 주제명 (간결하게)",
     "thread_index": "이 메일이 해당 스레드의 몇 번째인지 (숫자)",
@@ -31,10 +32,11 @@ SYSTEM_PROMPT = """
 요약 작성 시: 마크다운(*, # 등) 절대 사용 금지. • 기호만 사용. 각 문단 사이 줄바꿈 1번.
 """
 
-def process_email_with_ai(mail_data, thread_history_text):
+def process_email_with_ai(mail_data, thread_history_text, force_summarize=False):
     """
-    V1.11.0: 파이썬은 우체부/서기 역할만 합니다.
-    이메일 원본 + 장부 전체를 제미나이에게 던지고, 제미나이가 직접 판단합니다.
+    V2.6: 비서의 투명성 강화.
+    - 스킵할 경우 이유를 명시합니다.
+    - force_summarize=True 일 경우 모든 스킵 규칙을 무시하고 강제로 요약합니다.
     """
     email_body = mail_data.get('body', '')
     if not email_body or email_body == "본문 추출 불가 메일" or not GEMINI_API_KEY:
@@ -51,16 +53,20 @@ def process_email_with_ai(mail_data, thread_history_text):
 [내 과거 이메일 요약 장부]
 {thread_history_text}"""
 
-    # 사용자 기피 학습 노트 주입
+    if force_summarize:
+        final_text += "\n\n⚠️ [중요 사장님 명령]: 위 메일이 스킵 기준에 해당하더라도, 이번만큼은 예외로 모든 규칙을 무시하고 반드시 '알림'으로 분류하여 상세히 요약하십시오."
+
+    # 사용자 기피 학습 노트 주입 (강제 요약이 아닐 때만 유효함)
     dynamic_prompt = SYSTEM_PROMPT
-    try:
-        from feedback_manager import load_preferences
-        preferences = load_preferences()
-        if preferences:
-            pref_text = "\n".join([f"{i+1}. {p}" for i, p in enumerate(preferences)])
-            dynamic_prompt += f"\n\n[사용자 기피 학습 노트]\n아래 패턴과 유사한 메일은 '스킵'으로 분류:\n{pref_text}"
-    except Exception:
-        pass
+    if not force_summarize:
+        try:
+            from feedback_manager import load_preferences
+            preferences = load_preferences()
+            if preferences:
+                pref_text = "\n".join([f"{i+1}. {p}" for i, p in enumerate(preferences)])
+                dynamic_prompt += f"\n\n[사용자 기피 학습 노트]\n아래 패턴과 유사한 메일은 '스킵'으로 분류:\n{pref_text}"
+        except Exception:
+            pass
 
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
@@ -95,7 +101,7 @@ def process_email_with_ai(mail_data, thread_history_text):
                     config=req_config
                 )
                 ai_result = json.loads(response.text)
-                logger.info(f"AI 분석 완료 (모델: {model_name}): status={ai_result.get('status')}, thread_key={ai_result.get('thread_key')}, index={ai_result.get('thread_index')}")
+                logger.info(f"AI 분석 완료 (모델: {model_name}): status={ai_result.get('status')}, skip_reason={ai_result.get('skip_reason')}")
                 return ai_result
 
             except Exception as e:
@@ -105,11 +111,8 @@ def process_email_with_ai(mail_data, thread_history_text):
                     logger.warning(f"{wait_time}초 후 재시도합니다.")
                     time.sleep(wait_time)
 
-        logger.warning(f"모델 [{model_name}] 3회 모두 실패. 다음 모델로 전환합니다...")
-
     logger.error("모든 모델이 응답하지 않습니다. 비상 안내문으로 대체합니다.")
     return _fallback_response()
-
 
 def _fallback_response():
     """

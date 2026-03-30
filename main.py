@@ -6,7 +6,7 @@ from config import TELEGRAM_BOT_TOKEN, logger
 # 앞서 우리가 정성껏 만든 주요 도구들을 하나의 커다란 공장 상자로 불러옵니다!
 from mail_parser import fetch_unseen_emails, save_processed_uid
 from ai_processor import process_email_with_ai
-from telegram_bot import send_email_alert, setup_telegram_handlers, escape_for_tg
+from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, escape_for_tg
 from thread_manager import format_threads_for_prompt, save_thread_entry, get_thread_msg_id
 from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue
 
@@ -107,7 +107,8 @@ async def background_mail_checker(application: Application):
 
                 # 4. AI 판단 결과에 따라 처리합니다.
                 if ai_result.get('status') == '스킵':
-                    logger.info(f"AI 판단: 요약 불필요 메일 패스 (제목: {mail_data.get('subject')})")
+                    logger.info(f"AI 판단: 요약 불필요 메일 (제목: {mail_data.get('subject')}) -> 스킵 알림 전송")
+                    await send_skip_alert(application, mail_data, ai_result)
 
                 elif ai_result.get('is_ai_error'):
                     # AI 12회 전부 실패 → 재시도 대기열에 조용히 저장, 텔레그램 알림 없음

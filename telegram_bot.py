@@ -28,6 +28,37 @@ def escape_for_tg(text):
         return ""
     return html.escape(str(text))
 
+async def send_skip_alert(application, mail_data: dict, ai_result: dict):
+    """
+    V2.6: AI가 '스킵'으로 분류한 메일에 대해 사유와 함께 알림을 보냅니다.
+    사용자가 직접 판단할 수 있도록 [그래도 요약해 줘!] 버튼을 제공합니다.
+    """
+    uid = mail_data.get('uid', '번호없음')
+    
+    # 나중에 강제 요약 시 꺼내 쓸 수 있도록 임시 저장소에 넣어둡니다.
+    temp_mail_cache[uid] = {
+        "mail": mail_data,
+        "ai": ai_result
+    }
+    
+    msg = (
+        f"⏭️ <b>[메일 요약 스킵 알림]</b>\n\n"
+        f"📝 <b>제목:</b> {escape_for_tg(mail_data.get('subject', ''))}\n"
+        f"👤 <b>보낸 사람:</b> {escape_for_tg(mail_data.get('sender', ''))}\n"
+        f"💡 <b>스킵 사유:</b> {escape_for_tg(ai_result.get('skip_reason', '내용 없음'))}\n\n"
+        f"<i>AI가 중요하지 않다고 판단했으나, 혹시 보고 싶으시면 아래 버튼을 누르세요.</i>"
+    )
+    
+    keyboard = [[InlineKeyboardButton("📝 그래도 요약해 줘! ✨", callback_data=f"force_summary_{uid}")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await application.bot.send_message(
+        chat_id=ALLOWED_CHAT_ID,
+        text=msg,
+        parse_mode="HTML",
+        reply_markup=reply_markup
+    )
+
 async def send_email_alert(application: Application, mail_data: dict, ai_result: dict, t_data: dict, base_subj: str):
     """
     새로운 이메일이 오고 AI가 분석을 마쳤을 때 텔레그램으로 배달합니다.
@@ -208,6 +239,40 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text="⚠️ 해당 메일 내용이 이미 옛날 것이라 파이썬이 내용을 까먹었습니다."
+            )
+
+    # [새로운 분기 4] 사장님의 준엄한 명령: "그래도 요약해!"
+    elif data.startswith("force_summary_"):
+        uid = data.split("_")[2]
+        cache_data = temp_mail_cache.get(uid)
+        
+        if cache_data:
+            logger.info(f"강제 요약 요청 접수 (UID: {uid})")
+            # 1. 화면에 "공사 중..." 표시
+            await query.edit_message_text(
+                text=f"{query.message.text}\n\n⏳ <b>사장님 명령 접수! 강제로 다시 분석 중입니다...</b>",
+                parse_mode="HTML"
+            )
+            
+            # 2. 강제 요약 수행 (순환 참조 방지를 위해 로컬 임포트)
+            from ai_processor import process_email_with_ai
+            from thread_manager import format_threads_for_prompt
+            
+            mail_data = cache_data["mail"]
+            history = format_threads_for_prompt()
+            
+            # force_summarize=True 옵션을 주어 모든 엔진을 풀가동합니다.
+            new_ai_result = await asyncio.to_thread(process_email_with_ai, mail_data, history, force_summarize=True)
+            
+            # 3. 분석 완료 시 알림 전송 (t_data는 새로 생성)
+            await send_email_alert(context.application, mail_data, new_ai_result, {}, mail_data.get('subject'))
+            
+            # 4. 기존 스킵 버튼은 지워줍니다.
+            await query.edit_message_reply_markup(reply_markup=None)
+        else:
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="⚠️ 임시 보관소에서 메일 데이터를 찾을 수 없습니다. (재부팅됨)"
             )
 
 
