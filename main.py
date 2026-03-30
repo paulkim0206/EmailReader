@@ -6,7 +6,7 @@ from config import TELEGRAM_BOT_TOKEN, logger
 # 앞서 우리가 정성껏 만든 주요 도구들을 하나의 커다란 공장 상자로 불러옵니다!
 from mail_parser import fetch_unseen_emails, save_processed_uid
 from ai_processor import process_email_with_ai
-from telegram_bot import send_email_alert, setup_telegram_handlers
+from telegram_bot import send_email_alert, setup_telegram_handlers, escape_for_tg
 from thread_manager import format_threads_for_prompt, save_thread_entry, get_thread_msg_id
 from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue
 
@@ -39,9 +39,9 @@ async def background_mail_checker(application: Application):
                             chat_id=str(__import__('config').TELEGRAM_CHAT_ID),
                             text=(
                                 f"⚠️ <b>AI 요약 최종 실패</b>\n\n"
-                                f"🕒 <b>수신:</b> {retry_mail.get('date', '')}\n"
-                                f"👤 <b>발신:</b> {retry_mail.get('sender', '')}\n"
-                                f"📝 <b>제목:</b> {retry_mail.get('subject', '')}\n\n"
+                                f"🕒 <b>수신:</b> {escape_for_tg(retry_mail.get('date', ''))}\n"
+                                f"👤 <b>발신:</b> {escape_for_tg(retry_mail.get('sender', ''))}\n"
+                                f"📝 <b>제목:</b> {escape_for_tg(retry_mail.get('subject', ''))}\n\n"
                                 f"AI 서버가 5분 후 재시도에도 응답하지 않았습니다.\n"
                                 f"원본 이메일을 직접 확인해 주십시오."
                             ),
