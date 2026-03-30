@@ -97,9 +97,13 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     사용자의 명백한 클릭 명령 없이는 어떤 문서 파일도 제멋대로 생성하지 못하도록 통과 지점을 만든 방어벽입니다.
     """
     query = update.callback_query
-    
+
     # 텔레그램 서버에 "주인님이 버튼 누르셨다! 화면에 모래시계 치워!" 라고 신호를 반환합니다.
-    await query.answer()
+    # [V2.1] 클라우드 환경에서 응답이 늦어도 이후 처리가 중단되지 않도록 try/except로 방어합니다.
+    try:
+        await query.answer()
+    except Exception:
+        pass  # Timeout이 나도 아래 실제 처리 로직은 계속 진행합니다.
 
     # 버튼 뒤에 숨겨두었던 암호문 (예: 'save_10번편지')을 가져옵니다.
     data = query.data
@@ -175,15 +179,20 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             
             if success:
                 # 사용자가 또 광클릭 못하게 기존의 모든 메뉴판(버튼들)을 싹 날려줍니다.
-                await query.edit_message_reply_markup(reply_markup=None) 
+                await query.edit_message_reply_markup(reply_markup=None)
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text="✅ 기특한 제미나이(AI)가 이 메일의 패턴을 머릿속에 완벽히 암기했습니다!\n다음에 이와 비슷한 내용 혹은 형식의 메일이 오면 사용자님을 귀찮게 하지 않고 스스로 알아서 [스킵]하겠습니다. 🧠✨"
+                    text=(
+                        f"🧠 요약 제외 학습 완료!\n\n"
+                        f"📝 등록된 제목 패턴: [{escape_for_tg(subject)}]\n\n"
+                        f"앞으로 이와 비슷한 내용의 메일이 오면 사용자님을 귀찮게 하지 않고 "
+                        f"스스로 조용히 [스킵]하겠습니다. ✨"
+                    )
                 )
             else:
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text=f"⚠️ {msg}"
+                    text=f"ℹ️ 이미 학습된 패턴입니다! 중복 등록은 생략했습니다.\n(제목: [{escape_for_tg(subject)}])"
                 )
         else:
             await context.bot.send_message(
