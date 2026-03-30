@@ -165,5 +165,12 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
         )
         return response.text
     except Exception as e:
-        logger.error(f"비서 챗 응답 오류: {e}")
-        return f"🚨 (통신 장애) 죄송합니다 부장님, 제 두뇌 회로에 잠시 문제가 생겼습니다.\n오류 내용: {e}"
+        # [V4.3 긴급 진단] 부장님, 혹시 키가 옛날 거면 여기서 범인 검거합니다!
+        masked_key = f"{GEMINI_API_KEY[:4]}...{GEMINI_API_KEY[-4:]}" if GEMINI_API_KEY else "없음"
+        error_msg = str(e)
+        logger.error(f"대화 처리 중 오류 발동! (사용 중인 키: {masked_key}) | 에러: {error_msg}")
+        
+        if "API key expired" in error_msg:
+            return f"🚨 (통신 장애) 죄송합니다 부장님, 제 두뇌 회로에 잠시 문제가 생겼습니다.\n오류 내용: API key expired. (현재 봇이 쓰고 있는 키: {masked_key})\n구글 AI Studio에서 새로 발급받으신 키와 비교해 보세요!"
+        
+        return "🚨 앗, 부장님! 방금 머리가 좀 아파서(서버 오류) 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?"
