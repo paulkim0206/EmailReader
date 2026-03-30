@@ -1,6 +1,6 @@
 import json
 import os
-from config import USER_PREFERENCES_FILE, logger
+from config import USER_PREFERENCES_FILE, USER_CORRECTIONS_FILE, logger
 
 def load_preferences():
     """AI가 기피해야 할 [학습 노트]를 하드디스크에서 꺼내어 리스트로 반환합니다."""
