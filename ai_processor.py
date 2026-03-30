@@ -147,8 +147,11 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
     chat_prompt += "\n\n" + load_prompt("telegram_commands.txt")
     
     # [V5.0 장기 기억 장착] 피아니가 부장님과의 대화 흐름을 잊지 않도록 최근 20마디 대화 맥락을 주입합니다.
-    from chat_manager import get_recent_chat_context
-    chat_context = get_recent_chat_context(limit=20)
+    try:
+        from chat_manager import get_recent_chat_context
+        chat_context = get_recent_chat_context(limit=20)
+    except Exception:
+        chat_context = ""
     
     # [V4.4] AI에게 현재 시간을 알려주어 '2024년'으로 착각하는 오류를 방지합니다.
     import datetime

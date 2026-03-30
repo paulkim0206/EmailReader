@@ -28,8 +28,8 @@ THREAD_MAX_SIZE = 2000     # 최대 스레드 기억 용량 (방 개수 기준)
 THREAD_TIMEOUT_DAYS = 30   # 30일 이상 소식 없는 방은 자동 삭제
 
 # [V4.2] 공용 수첩(JSON) 및 대화 히스토리 파일 경로
-USER_NOTES_FILE = os.path.join(DATA_DIR, "user_notes.json")
-CHAT_HISTORY_FILE = os.path.join(DATA_DIR, "chat_history.json")
+USER_NOTES_FILE = os.path.join(BASE_DIR, "data", "user_notes.json")
+CHAT_HISTORY_FILE = os.path.join(BASE_DIR, "data", "chat_history.json")
 
 # [V1.0] 아이디어노트 파일 경로 (구 버전 호환용)
 IDEA_NOTE_FILE = os.path.join(BASE_DIR, "아이디어노트.md")

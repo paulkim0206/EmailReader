@@ -409,8 +409,11 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_text = update.message.text
     
     # [V5.0] 장기 기억을 위해 부장님의 말씀을 즉시 장부에 기록합니다.
-    from chat_manager import save_chat_log
-    save_chat_log(role='user', content=user_text)
+    try:
+        from chat_manager import save_chat_log
+        save_chat_log(role='user', content=user_text)
+    except Exception:
+        pass
     
     # [V3.2] 사용자가 이전 메시지에 답장(Reply)을 한 경우 그 텍스트를 파악합니다.
     replied_text = None
@@ -476,8 +479,11 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
             # 이미 비서가 자연어로 "기억하겠습니다!" 라고 뱉었으므로, 별도의 시스템 메시지는 추가하지 않습니다.
 
         # [V5.0] 장기 기억을 위해 피아니의 답변도 장부에 기록합니다.
-        from chat_manager import save_chat_log
-        save_chat_log(role='assistant', content=ai_reply)
+        try:
+            from chat_manager import save_chat_log
+            save_chat_log(role='assistant', content=ai_reply)
+        except Exception:
+            pass
 
         # 만들어진 최종 답변을 텔레그램으로 보냅니다.
         await update.message.reply_text(ai_reply)
