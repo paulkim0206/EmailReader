@@ -241,7 +241,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
                 text="⚠️ 해당 메일 내용이 이미 옛날 것이라 파이썬이 내용을 까먹었습니다."
             )
 
-    # [새로운 분기 4] 사장님의 준엄한 명령: "그래도 요약해!"
+    # [새로운 분기 4] 부장님의 준엄한 명령: "그래도 요약해!"
     elif data.startswith("force_summary_"):
         uid = data.split("_")[2]
         cache_data = temp_mail_cache.get(uid)
@@ -250,7 +250,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             logger.info(f"강제 요약 요청 접수 (UID: {uid})")
             # 1. 화면에 "공사 중..." 표시
             await query.edit_message_text(
-                text=f"{query.message.text}\n\n⏳ <b>사장님 명령 접수! 강제로 다시 분석 중입니다...</b>",
+                text=f"{query.message.text}\n\n⏳ <b>부장님 명령 접수! 강제로 다시 분석 중입니다...</b>",
                 parse_mode="HTML"
             )
             
@@ -293,9 +293,8 @@ async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 2. 명령어 껍데기('/note ')를 정규식 가위로 강제로 잘라냅니다.
     memo_content = re.sub(r'^/note\s*', '', text, flags=re.IGNORECASE).strip()
 
-    # 빈 내용 방어
     if not memo_content:
-        await update.message.reply_text("🤔 사장님! 내용을 명령어 뒤에 띄어쓰고 같이 적어주세요!\n👉 예시: /note 🐛버그: 텔레그램 버튼 안 눌림")
+        await update.message.reply_text("🤔 부장님! 내용을 명령어 뒤에 띄어쓰고 같이 적어주세요!\n👉 예시: /note 🐛버그: 텔레그램 버튼 안 눌림")
         return
 
     try:
@@ -395,7 +394,7 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
     except Exception as e:
         logger.error(f"대화 처리 중 오류: {e}")
-        await update.message.reply_text("🚨 앗, 사장님! 방금 머리가 좀 아파서(서버 오류) 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?")
+        await update.message.reply_text("🚨 앗, 부장님! 방금 머리가 좀 아파서(서버 오류) 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?")
 
 def setup_telegram_handlers(application: Application):
     # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note', '/update' 옵션을 박아 넣습니다.

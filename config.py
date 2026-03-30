@@ -43,6 +43,9 @@ USER_PREFERENCES_FILE = os.path.join(BASE_DIR, "user_preferences.json")
 # [V3.2] AI 요약 교정용 '오답 노트' 오프라인 기록용 경로 세팅
 USER_CORRECTIONS_FILE = os.path.join(BASE_DIR, "user_corrections.json")
 
+# [V3.3] 피아니 페르소나 및 외부 프롬프트 텍스트가 담긴 폴더 경로 세팅
+PROMPTS_DIR = os.path.join(BASE_DIR, "prompts")
+
 # 전역 로거(Logger) 설정 함수
 def setup_logger():
     # 로거 인스턴스 생성

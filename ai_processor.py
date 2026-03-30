@@ -4,35 +4,18 @@ import time
 
 from google import genai
 from google.genai import types
-from config import GEMINI_API_KEY, logger
+from config import GEMINI_API_KEY, PROMPTS_DIR, logger
 
-SYSTEM_PROMPT = """
-당신은 무역, 구매, 영업 등 광범위한 실무를 총괄하는 최고급 이메일 비서입니다.
-
-아래에 [새로 도착한 이메일 원문]과 [내 과거 이메일 요약 장부]가 함께 제공됩니다.
-
-판단 기준:
-1. 장부에 저장된 과거 기록들을 살펴보고, 새 이메일이 어떤 주제와 내용상 이어지는 핑퐁(답장)인지 종합적으로 판단하십시오.
-2. 만약 핑퐁이라면: 이미 요약된 과거 내용은 무시하고, 새롭게 추가된 내용만 핵심 요약하십시오. thread_key는 장부에서 일치하는 주제명을 그대로 사용하십시오.
-3. 만약 완전히 새로운 메일이라면: 전체 내용을 요약하고, thread_key로 이 메일의 핵심 주제를 간결하게 작성하십시오.
-4. 내용 없이 정보성이 전혀 없는 단순 인사 메일("잘 받았습니다", "감사합니다" 등)의 경우에만 status를 '스킵'으로 분류하십시오.
-
-[사용자 기피 학습 노트]에 등록된 패턴과 유사한 메일도 '스킵'으로 분류하십시오.
-
-반드시 아래 JSON 형식만 반환하십시오:
-{
-    "status": "'알림' 또는 '스킵'",
-    "skip_reason": "스킵 시 그 이유를 한국어로 한 문장 작성 (알림일 경우 빈 문자열)",
-    "is_thread": "true 또는 false (핑퐁 여부)",
-    "thread_key": "연결된 주제명 또는 새 주제명 (간결하게)",
-    "thread_index": "이 메일이 해당 스레드의 몇 번째인지 (숫자)",
-    "summary": "요약 내용 (status가 '스킵'이면 빈 문자열)"
-}
-
-요약 작성 시 규칙:
-1. 마크다운(*, # 등) 절대 사용 금지. 기호는 • 만 사용. 각 문단 사이 줄바꿈 1번.
-2. 누가 누구에게 어떤 내용을 전달/요청했는지 주어와 목적어(행위자) 관계가 드러나게 작성하십시오. (예: "발송자가 수신자에게 ~건에 대해 문서를 송부함")
-"""
+def load_prompt(filename):
+    """V3.3 외부 텍스트(메모장) 프롬프트 파일을 안전하게 읽어오는 헬퍼 함수"""
+    filepath = os.path.join(PROMPTS_DIR, filename)
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except Exception as e:
+        logger.error(f"[치명적 오류] 프롬프트 파일({filename})을 찾을 수 없습니다: {e}")
+        # 파일이 없을 경우 최소한의 안전장치(기본 자아)를 강제로 반환하여 시스템 다운 방지
+        return "당신은 부장님을 보조하는 비서입니다. 친절하게 응답하십시오."
 
 def process_email_with_ai(mail_data, thread_history_text, force_summarize=False):
     """
@@ -56,10 +39,12 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False)
 {thread_history_text}"""
 
     if force_summarize:
-        final_text += "\n\n⚠️ [중요 사장님 명령]: 위 메일이 스킵 기준에 해당하더라도, 이번만큼은 예외로 모든 규칙을 무시하고 반드시 '알림'으로 분류하여 상세히 요약하십시오."
+        final_text += "\n\n⚠️ [중요 부장님 명령]: 위 메일이 스킵 기준에 해당하더라도, 이번만큼은 예외로 모든 규칙을 무시하고 반드시 '알림'으로 분류하여 상세히 요약하십시오."
 
-    # 사용자 기피 학습 노트 주입 (강제 요약이 아닐 때만 유효함)
-    dynamic_prompt = SYSTEM_PROMPT
+    # [V3.3] 피아니의 자아(Persona)와 엄격한 이메일 요약 규정(Rules) 텍스트 파일 2개를 불러와 조립합니다.
+    base_persona = load_prompt("peani_persona.txt")
+    summary_rules = load_prompt("email_summary_rules.txt")
+    dynamic_prompt = f"{base_persona}\n\n{summary_rules}"
     if not force_summarize:
         try:
             from feedback_manager import load_preferences, load_corrections
@@ -143,29 +128,27 @@ def _fallback_response():
 def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
     """
     V3.0 대화형 인공지능 비서 모드:
-    사용자의 일상적인 말이나 질문에 대해, 사장님을 보좌하는 유능하고 친절한 비서의 자아(Persona)로 대답합니다.
+    사용자의 일상적인 말이나 질문에 대해, 부장님을 보좌하는 유능하고 친절한 비서의 자아(Persona)로 대답합니다.
     [V3.2] replied_text가 제공되면, 사용자가 봇의 지난 요약을 지적/피드백하는 상황으로 간주하여 교정 규칙을 추출합니다.
     """
     if not GEMINI_API_KEY:
         return "🚨 (시스템 오류) 제 두뇌(API 키)가 연결되어 있지 않습니다. .env를 확인해 주세요."
 
-    chat_prompt = """당신은 무역, 구매, 영업 등 광범위한 실무를 총괄하는 사장님을 보좌하는 '최고급 지능형 이메일 비서'입니다.
-당신의 성격은 매우 깍듯하고 유능하며, 센스 있고 다정합니다. 사장님의 질문에 명확하고 친절하게 답변하십시오.
-이모지(😊, 🧠, 🚀 등)를 적절히 섞어 딱딱하지 않고 생동감 있게 대화하십시오.
-단답형보다는 비서다운 말투("사장님, ~입니다.", "확인해 보겠습니다!")를 사용하세요."""
+    # [V3.3] 채팅 시에는 피아니 페르소나 텍스트 파일만 깔끔하게 불러와서 뇌에 덮어씌웁니다.
+    chat_prompt = load_prompt("peani_persona.txt")
 
-    # [V3.2] 사장님이 답장(피드백)을 보낸 경우의 특수 임무 부여
+    # [V3.2] 부장님이 답장(피드백)을 보낸 경우의 특수 임무 부여
     if replied_text:
         chat_prompt += f"""
 \n\n[특수 임무: 요약 피드백 교정 추출]
-사장님이 당신의 과거 요약 메시지에 '답장'을 달아서 오류(수신자/발신자 오인, 오타 등)를 지적했습니다.
+부장님이 당신의 과거 요약 메시지에 '답장'을 달아서 오류(수신자/발신자 오인, 오타 등)를 지적했습니다.
 - 과거 요약 메시지: "{replied_text[:300]}..."
 
-당신은 사장님의 지적을 받고 1) 정중히 사과하고 앞으로 주의하겠다고 짧게 답변하십시오.
-2) 사장님의 지적 내용에서 당신이 **미래의 모든 요약 작업에서 반드시 지켜야 할 '일반적인 규칙(오답 노트)' 한 줄**을 추출하십시오.
+당신은 부장님의 지적을 받고 1) 정중히 사과하고 앞으로 주의하겠다고 짧게 답변하십시오.
+2) 부장님의 지적 내용에서 당신이 **미래의 모든 요약 작업에서 반드시 지켜야 할 '일반적인 규칙(오답 노트)' 한 줄**을 추출하십시오.
 3) 당신의 사과 답변 맨 끝에, 반드시 추출한 규칙을 아래 태그로 감싸서 출력하십시오.
 형식: [[LEARN]] 추출된 일반 교정 규칙 한 줄 [[/LEARN]]
-예시: [[LEARN]] A대리가 아니라 A부장으로 직급을 표기할 것 [[/LEARN]]"""
+예시: [[LEARN]] A대리가 아니라 A팀장으로 직급을 표기할 것 [[/LEARN]]"""
 
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
@@ -181,4 +164,4 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
         return response.text
     except Exception as e:
         logger.error(f"비서 챗 응답 오류: {e}")
-        return f"🚨 (통신 장애) 죄송합니다 사장님, 제 두뇌 회로에 잠시 문제가 생겼습니다.\n오류 내용: {e}"
+        return f"🚨 (통신 장애) 죄송합니다 부장님, 제 두뇌 회로에 잠시 문제가 생겼습니다.\n오류 내용: {e}"
