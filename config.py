@@ -40,6 +40,9 @@ RETRY_WAIT_MINUTES = 5  # AI 6회 실패 후 재시도까지 기다리는 시간
 # AI 제미나이 맞춤형 진화용 '기피 메일 학습 노트' 경로 세팅
 USER_PREFERENCES_FILE = os.path.join(BASE_DIR, "user_preferences.json")
 
+# [V3.2] AI 요약 교정용 '오답 노트' 오프라인 기록용 경로 세팅
+USER_CORRECTIONS_FILE = os.path.join(BASE_DIR, "user_corrections.json")
+
 # 전역 로거(Logger) 설정 함수
 def setup_logger():
     # 로거 인스턴스 생성

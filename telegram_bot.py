@@ -360,6 +360,11 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     user_text = update.message.text
     
+    # [V3.2] 사용자가 이전 메시지에 답장(Reply)을 한 경우 그 텍스트를 파악합니다.
+    replied_text = None
+    if update.message.reply_to_message and update.message.reply_to_message.text:
+        replied_text = update.message.reply_to_message.text
+    
     # 텔레그램 화면 상단에 "봇이 타이핑 중..." (Typing action)을 띄워 생동감을 줍니다.
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
     
@@ -368,9 +373,24 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         from ai_processor import chat_with_secretary
         
         # AI가 생각해서 답변을 만들어옵니다. (기다리는 동안 봇이 멈추지 않게 비동기로 처리)
-        ai_reply = await asyncio.to_thread(chat_with_secretary, user_text)
+        ai_reply = await asyncio.to_thread(chat_with_secretary, user_text, replied_text)
         
-        # 만들어진 답변을 텔레그램으로 보냅니다.
+        # [V3.2] AI의 답변에서 오답 노트 태그([[LEARN]]...[[/LEARN]])를 파싱(추출)합니다.
+        import re
+        learn_match = re.search(r'\[\[LEARN\]\](.*?)\[\[/LEARN\]\]', ai_reply, re.DOTALL)
+        
+        if learn_match:
+            rule_text = learn_match.group(1).strip()
+            
+            # 추출된 규칙을 피드백 매니저를 통해 오답 노트 장부에 영구 저장합니다.
+            from feedback_manager import add_correction
+            add_correction(rule_text)
+            
+            # 태그가 포함된 원본 답변에서 해당 태그 부분만 깔끔하게 지워냅니다.
+            ai_reply = re.sub(r'\[\[LEARN\]\].*?\[\[/LEARN\]\]', '', ai_reply, flags=re.DOTALL).strip()
+            ai_reply += f"\n\n*(✅ 비서가 방금 지적하신 내용을 오답 노트 장부에 영구 기록하여 학습했습니다!)*"
+
+        # 만들어진 최종 답변을 텔레그램으로 보냅니다.
         await update.message.reply_text(ai_reply)
         
     except Exception as e:

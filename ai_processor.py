@@ -62,12 +62,22 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False)
     dynamic_prompt = SYSTEM_PROMPT
     if not force_summarize:
         try:
-            from feedback_manager import load_preferences
+            from feedback_manager import load_preferences, load_corrections
+            
+            # 1. 스킵 기피 패턴 주입
             preferences = load_preferences()
             if preferences:
                 pref_text = "\n".join([f"{i+1}. {p}" for i, p in enumerate(preferences)])
                 dynamic_prompt += f"\n\n[사용자 기피 학습 노트]\n아래 패턴과 유사한 메일은 '스킵'으로 분류:\n{pref_text}"
-        except Exception:
+                
+            # 2. [V3.2] 오답 노트 (요약 시 필수 교정 규칙) 주입
+            corrections = load_corrections()
+            if corrections:
+                corr_text = "\n".join([f"- {c}" for c in corrections])
+                dynamic_prompt += f"\n\n[사용자 교정 오답 노트 (가장 우선적으로 지킬 것)]\n이전 요약 오류를 수정한 규칙입니다. 요약 시 반드시 엄수하십시오:\n{corr_text}"
+                
+        except Exception as e:
+            logger.error(f"학습 노트를 불러오는 중 오류 발생: {e}")
             pass
 
     try:
@@ -130,10 +140,11 @@ def _fallback_response():
         "summary": "AI 서버 응답 오류로 이번 메일은 요약하지 못했습니다. 원본 이메일을 직접 확인해 주십시오."
     }
 
-def chat_with_secretary(user_message: str) -> str:
+def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
     """
     V3.0 대화형 인공지능 비서 모드:
     사용자의 일상적인 말이나 질문에 대해, 사장님을 보좌하는 유능하고 친절한 비서의 자아(Persona)로 대답합니다.
+    [V3.2] replied_text가 제공되면, 사용자가 봇의 지난 요약을 지적/피드백하는 상황으로 간주하여 교정 규칙을 추출합니다.
     """
     if not GEMINI_API_KEY:
         return "🚨 (시스템 오류) 제 두뇌(API 키)가 연결되어 있지 않습니다. .env를 확인해 주세요."
@@ -142,6 +153,19 @@ def chat_with_secretary(user_message: str) -> str:
 당신의 성격은 매우 깍듯하고 유능하며, 센스 있고 다정합니다. 사장님의 질문에 명확하고 친절하게 답변하십시오.
 이모지(😊, 🧠, 🚀 등)를 적절히 섞어 딱딱하지 않고 생동감 있게 대화하십시오.
 단답형보다는 비서다운 말투("사장님, ~입니다.", "확인해 보겠습니다!")를 사용하세요."""
+
+    # [V3.2] 사장님이 답장(피드백)을 보낸 경우의 특수 임무 부여
+    if replied_text:
+        chat_prompt += f"""
+\n\n[특수 임무: 요약 피드백 교정 추출]
+사장님이 당신의 과거 요약 메시지에 '답장'을 달아서 오류(수신자/발신자 오인, 오타 등)를 지적했습니다.
+- 과거 요약 메시지: "{replied_text[:300]}..."
+
+당신은 사장님의 지적을 받고 1) 정중히 사과하고 앞으로 주의하겠다고 짧게 답변하십시오.
+2) 사장님의 지적 내용에서 당신이 **미래의 모든 요약 작업에서 반드시 지켜야 할 '일반적인 규칙(오답 노트)' 한 줄**을 추출하십시오.
+3) 당신의 사과 답변 맨 끝에, 반드시 추출한 규칙을 아래 태그로 감싸서 출력하십시오.
+형식: [[LEARN]] 추출된 일반 교정 규칙 한 줄 [[/LEARN]]
+예시: [[LEARN]] A대리가 아니라 A부장으로 직급을 표기할 것 [[/LEARN]]"""
 
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
