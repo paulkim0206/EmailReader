@@ -127,3 +127,32 @@ def _fallback_response():
         "thread_index": 1,
         "summary": "AI 서버 응답 오류로 이번 메일은 요약하지 못했습니다. 원본 이메일을 직접 확인해 주십시오."
     }
+
+def chat_with_secretary(user_message: str) -> str:
+    """
+    V3.0 대화형 인공지능 비서 모드:
+    사용자의 일상적인 말이나 질문에 대해, 사장님을 보좌하는 유능하고 친절한 비서의 자아(Persona)로 대답합니다.
+    """
+    if not GEMINI_API_KEY:
+        return "🚨 (시스템 오류) 제 두뇌(API 키)가 연결되어 있지 않습니다. .env를 확인해 주세요."
+
+    chat_prompt = """당신은 무역, 구매, 영업 등 광범위한 실무를 총괄하는 사장님을 보좌하는 '최고급 지능형 이메일 비서'입니다.
+당신의 성격은 매우 깍듯하고 유능하며, 센스 있고 다정합니다. 사장님의 질문에 명확하고 친절하게 답변하십시오.
+이모지(😊, 🧠, 🚀 등)를 적절히 섞어 딱딱하지 않고 생동감 있게 대화하십시오.
+단답형보다는 비서다운 말투("사장님, ~입니다.", "확인해 보겠습니다!")를 사용하세요."""
+
+    try:
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        req_config = types.GenerateContentConfig(
+            system_instruction=chat_prompt,
+        )
+        # 빠른 응답을 위해 2.5-flash 모델을 메인으로 사용
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=user_message,
+            config=req_config
+        )
+        return response.text
+    except Exception as e:
+        logger.error(f"비서 챗 응답 오류: {e}")
+        return f"🚨 (통신 장애) 죄송합니다 사장님, 제 두뇌 회로에 잠시 문제가 생겼습니다.\n오류 내용: {e}"

@@ -6,7 +6,7 @@ import sys
 import os
 import subprocess
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CallbackQueryHandler, ContextTypes, CommandHandler
+from telegram.ext import Application, CallbackQueryHandler, ContextTypes, CommandHandler, MessageHandler, filters
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, IDEA_NOTE_FILE
 from local_storage import create_and_save_report
 
@@ -349,6 +349,34 @@ async def handle_update_command(update: Update, context: ContextTypes.DEFAULT_TY
         logger.error(f"업데이트 중 알 수 없는 오류 발생: {e}")
         await update.message.reply_text(f"🚨 업데이트 중 오류가 발생했습니다: {e}")
 
+async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V3.0 대화형 비서 기능]
+    사용자가 명령어가 아닌 일반 대화(예: "안녕?", "오늘 날씨 어때?")를 입력했을 때 작동합니다.
+    제미나이 AI가 비서의 자아로 답장합니다.
+    """
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID:
+        return
+
+    user_text = update.message.text
+    
+    # 텔레그램 화면 상단에 "봇이 타이핑 중..." (Typing action)을 띄워 생동감을 줍니다.
+    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
+    
+    try:
+        # 비서 AI 뇌(로직)를 불러옵니다.
+        from ai_processor import chat_with_secretary
+        
+        # AI가 생각해서 답변을 만들어옵니다. (기다리는 동안 봇이 멈추지 않게 비동기로 처리)
+        ai_reply = await asyncio.to_thread(chat_with_secretary, user_text)
+        
+        # 만들어진 답변을 텔레그램으로 보냅니다.
+        await update.message.reply_text(ai_reply)
+        
+    except Exception as e:
+        logger.error(f"대화 처리 중 오류: {e}")
+        await update.message.reply_text("🚨 앗, 사장님! 방금 머리가 좀 아파서(서버 오류) 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?")
+
 def setup_telegram_handlers(application: Application):
     # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note', '/update' 옵션을 박아 넣습니다.
     application.add_handler(CommandHandler("status", command_status))
@@ -358,4 +386,7 @@ def setup_telegram_handlers(application: Application):
     # 인라인 버튼(문서 저장 등) 콜백 처리를 위한 리스너입니다.
     application.add_handler(CallbackQueryHandler(handle_button_callback))
     
-    logger.info("텔레그램 제어 수신기('/status', '/메모' 등)와 버튼 수신기가 메인 서버에 장착 완료되었습니다.")
+    # [V3.0] 일반적인 텍스트 대화(명령어 제외)를 감지하는 수신기입니다.
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_normal_chat))
+    
+    logger.info("텔레그램 제어 수신기('/status', '/메모' 등)와 일상 대화 수신기가 메인 서버에 장착 완료되었습니다.")
