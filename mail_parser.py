@@ -152,7 +152,8 @@ def fetch_unseen_emails():
     logger.info("메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...")
     try:
         # 이메일 서버와 안전하게 대화할 수 있는 전용 통신망(SSL)을 엽니다.
-        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+        # [V1.12.1] 봇이 영원히 멈추는(프리징) 현상 방지를 위해 15초 타임아웃을 걸어둡니다.
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=15)
         mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         mail.select("inbox")
         logger.info("메일 서버 안전하게 접속 성공 완료!")

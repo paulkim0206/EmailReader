@@ -29,7 +29,8 @@ async def background_mail_checker(application: Application):
                     retry_mail = retry_item["mail_data"]
                     retry_uid = retry_item["uid"]
                     thread_history_text = format_threads_for_prompt()
-                    ai_result = process_email_with_ai(retry_mail, thread_history_text)
+                    # [V1.12.2] AI 통신 중 봇이 멈추지 않게 백그라운드 스레드로 위임합니다!
+                    ai_result = await asyncio.to_thread(process_email_with_ai, retry_mail, thread_history_text)
 
                     if ai_result.get('is_ai_error'):
                         # 재시도도 실패 → 사용자에게 최종 오류 알림 전송
@@ -69,7 +70,8 @@ async def background_mail_checker(application: Application):
                     remove_from_retry_queue(retry_uid)
 
 
-            unseen_emails = fetch_unseen_emails()
+            # [V1.12.2] 메일 수신 중 봇이 멈추지 않게 백그라운드 스레드로 위임합니다!
+            unseen_emails = await asyncio.to_thread(fetch_unseen_emails)
             
             # [아이디어 노트 반영] 서버 켜기 전부터 쌓여있던 안 읽은 메일은 알람을 보내지 않고 일괄 무시 처리합니다.
             if is_first_run:
@@ -100,7 +102,8 @@ async def background_mail_checker(application: Application):
                 thread_history_text = format_threads_for_prompt()
 
                 # 3. 제미나이가 원본+장부를 읽고 모든 판단을 합니다.
-                ai_result = process_email_with_ai(mail_data, thread_history_text)
+                # [V1.12.2] AI 통신 중 봇이 멈추지 않게 백그라운드 스레드로 위임
+                ai_result = await asyncio.to_thread(process_email_with_ai, mail_data, thread_history_text)
 
                 # 4. AI 판단 결과에 따라 처리합니다.
                 if ai_result.get('status') == '스킵':

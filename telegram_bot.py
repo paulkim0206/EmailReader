@@ -2,6 +2,9 @@ import asyncio
 import html
 import re
 import datetime
+import sys
+import os
+import subprocess
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, CommandHandler
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, IDEA_NOTE_FILE
@@ -228,10 +231,45 @@ async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.error(f"메모 기록 중 치명적인 에러 발생: {e}")
         await update.message.reply_text("🚨 앗! 하드디스크에 메모를 찍으려고 했는데 오류가 발생했습니다. 나중에 다시 시도해 주세요.")
 
+async def handle_update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V2.0 클라우드용 핵심 무기] 
+    사용자가 IDE에서 코드를 고치고 깃허브에 올린 뒤 텔레그램에 '/update'라고 치면,
+    클라우드에 있는 봇이 스스로 깃허브에서 새 코드를 다운받고 자기 자신을 재부팅(소생)시킵니다!
+    """
+    chat_id = str(update.message.chat_id)
+    if chat_id != ALLOWED_CHAT_ID:
+        return
+
+    await update.message.reply_text("🔄 [시스템 업데이트] 깃허브에서 새로운 똑똑해진 뇌(코드)를 다운로드합니다...")
+    
+    try:
+        # 1. 깃허브에서 최신 코드 강제 당겨오기 (Pull)
+        result = await asyncio.to_thread(
+            subprocess.run,
+            ['git', 'pull'],
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode == 0:
+            await update.message.reply_text(f"✅ 다운로드 완벽 성공!\n\n[처리 결과]\n{result.stdout}\n\n🤖 3초 뒤, 봇이 스스로 전원을 껐다 켜서(재부팅) 새로운 패치를 장착합니다. 잠시 후 뵙겠습니다!")
+            # 2. 메세지를 무사히 보내고, 3초 뒤에 자기 자신을 파이썬 명령어로 100% 껐다 켭니다(Restart).
+            await asyncio.sleep(3)
+            # os.execl 은 현재 실행 중인 파이썬 프로세스를 '새 파이썬 프로세스'로 갈아 끼워버리는 완벽한 재부팅 기술입니다.
+            os.execl(sys.executable, sys.executable, *sys.argv)
+        else:
+            await update.message.reply_text(f"❌ 다운로드 실패! 코드가 꼬였을 수 있습니다.\n\n[에러 내용]\n{result.stderr}")
+            
+    except Exception as e:
+        logger.error(f"업데이트 중 알 수 없는 오류 발생: {e}")
+        await update.message.reply_text(f"🚨 업데이트 중 오류가 발생했습니다: {e}")
+
 def setup_telegram_handlers(application: Application):
-    # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note' 옵션을 박아 넣습니다.
+    # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note', '/update' 옵션을 박아 넣습니다.
     application.add_handler(CommandHandler("status", command_status))
     application.add_handler(CommandHandler("note", handle_memo_command))
+    application.add_handler(CommandHandler("update", handle_update_command))
     
     # 인라인 버튼(문서 저장 등) 콜백 처리를 위한 리스너입니다.
     application.add_handler(CallbackQueryHandler(handle_button_callback))
