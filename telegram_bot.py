@@ -68,7 +68,7 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
             if i == len(message_chunks) - 1:
                 # 사용자가 버튼을 누르면 "save_<고유번호>" 또는 "block_<고유번호>" 란 암호 신호를 튕깁니다!
                 keyboard = [
-                    [InlineKeyboardButton("💾 마크다운(.md) 문서로 저장하기", callback_data=f"save_{uid}")],
+                    [InlineKeyboardButton("💾 HTML 리포트 받기 📥", callback_data=f"save_{uid}")],
                     [InlineKeyboardButton("🔇 이 발송자, 앞으로 요약 알림 받지 않기", callback_data=f"block_{uid}")],
                     [InlineKeyboardButton("👎 이런 류의 메일 내용 요약 제외 (AI 학습)", callback_data=f"learn_{uid}")]
                 ]
@@ -120,17 +120,27 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             success, filepath = create_and_save_report(cache_data["mail"], cache_data["ai"])
             
             if success:
-                # 너무 버튼을 신나게 여러 번 눌러 중복 낭비를 일으키지 않게, 해당 버튼을 깔끔하게 지워줍니다.
-                await query.edit_message_reply_markup(reply_markup=None) 
-                # 성공했다는 기쁜 소식을 메시지로 전달합니다.
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=f"✅ 문서를 내 컴퓨터의 전용 방어 금고에 안전하게 저장했습니다!\n📁 저장 경로(위치): {filepath}"
-                )
+                # [V2.5] 텔레그램으로 파일을 직접 전송합니다! (클라우드 환경 대응)
+                try:
+                    with open(filepath, 'rb') as document:
+                        await context.bot.send_document(
+                            chat_id=query.message.chat_id,
+                            document=document,
+                            filename=os.path.basename(filepath),
+                            caption="✅ 요청하신 HTML 분석 보고서 배달 완료! 📥"
+                        )
+                    # 너무 버튼을 신나게 여러 번 눌러 중복 낭비를 일으키지 않게, 해당 버튼을 깔끔하게 지워줍니다.
+                    await query.edit_message_reply_markup(reply_markup=None)
+                except Exception as e:
+                    logger.error(f"파일 전송 중 오류 발생: {e}")
+                    await context.bot.send_message(
+                        chat_id=query.message.chat_id,
+                        text=f"❌ 파일 전송 중 오류가 발생했습니다: {e}"
+                    )
             else:
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text="❌ 죄송합니다. 보고서를 쓰다가 잉크가 터지는 작은 소동(오류)이 생겼습니다."
+                    text="❌ 죄송합니다. 보고서를 작성하다가 작은 소동(오류)이 생겼습니다."
                 )
         else:
             await context.bot.send_message(
