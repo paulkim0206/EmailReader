@@ -63,8 +63,16 @@ def process_email_with_ai(mail_data, thread_history_text):
 
     # [V4.4] 이메일 분석 시에도 현재 날짜를 주입하여 날짜 판단 오류를 방지합니다.
     import datetime
-    now = datetime.datetime.now()
-    current_time_info = f"\n\n[현재 시간 자각 지침]\n오늘의 날짜와 요일은 {now.strftime('%Y-%m-%d (%A)')} 입니다. 이 시간을 기준으로 메일의 '날짜'가 오늘 기준 어제의 일인지, 미래의 일인지 정확히 판단하십시오."
+    import pytz
+    from config import USER_TIMEZONE
+    
+    try:
+        tz = pytz.timezone(USER_TIMEZONE)
+        now = datetime.datetime.now(tz)
+    except Exception:
+        now = datetime.datetime.now()
+        
+    current_time_info = f"\n\n[현재 시간 자각 지침]\n오늘의 날짜와 요일은 {now.strftime('%Y-%m-%d (%A)')} 이며, 현재 시각은 {now.strftime('%H:%M:%S')} 입니다. 이 시간을 기준으로 메일의 '날짜'가 오늘 기준 어제의 일인지, 미래의 일인지 정확히 판단하십시오."
     dynamic_prompt += current_time_info
 
     try:
@@ -160,8 +168,15 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
 
     # [V4.4] AI에게 현재 시간을 알려주어 '2024년'으로 착각하는 오류를 방지합니다.
     import datetime
-    now = datetime.datetime.now()
-    current_time_info = f"\n\n[현재 시간 자각 지침]\n오늘의 날짜와 시간은 {now.strftime('%Y-%m-%d %H:%M:%S')} 입니다. 이 시간을 기준으로 모든 대화와 일정을 판단하십시오."
+    import pytz
+    from config import USER_TIMEZONE
+    try:
+        tz = pytz.timezone(USER_TIMEZONE)
+        now = datetime.datetime.now(tz)
+    except Exception:
+        now = datetime.datetime.now()
+
+    current_time_info = f"\n\n[현재 시간 자각 지침]\n오늘의 날짜와 요일은 {now.strftime('%Y-%m-%d (%A)')} 이며, 현재 시각은 {now.strftime('%H:%M:%S')} 입니다. 이 시간을 기준으로 모든 대화와 일정을 판단하십시오."
 
     chat_prompt = chat_prompt + current_time_info + "\n\n" + chat_context
     if memo_prompt:

@@ -5,9 +5,11 @@ import datetime
 import sys
 import os
 import subprocess
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+import json
+import pytz
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, CommandHandler, MessageHandler, filters
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, IDEA_NOTE_FILE
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, IDEA_NOTE_FILE, TIMEZONE_FILE, USER_TIMEZONE
 from local_storage import create_and_save_report
 
 # 전 세계의 모든 사용자 중, 오직 '나(등록된 소유자)'에게만 알림을 보내고 명령을 받기 위한 검증용 정보입니다.
@@ -255,10 +257,134 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
                 text="⚠️ 임시 보관소에서 메일 데이터를 찾을 수 없습니다. (재부팅됨)"
             )
 
+    # [V7.0 새로운 분기] 사용자가 시간대(tz_) 수동 버튼을 눌렀을 때!!
+    elif data.startswith("tz_"):
+        new_tz = data.replace("tz_", "")
+        
+        # 1. 설정 파일에 저장
+        try:
+            with open(TIMEZONE_FILE, "w", encoding="utf-8") as f:
+                json.dump({"timezone": new_tz}, f, ensure_ascii=False, indent=4)
+            
+            # 2. 현재 실행 중인 프로그램 설정 즉시 업데이트
+            import config
+            config.USER_TIMEZONE = new_tz
+            
+            import pytz
+            now = datetime.datetime.now(pytz.timezone(new_tz))
+            
+            await query.edit_message_reply_markup(reply_markup=None)
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=f"✅ 시계 동기화 완료!\n이제 피아니의 시계가 <b>[{new_tz}]</b> 기준으로 흐릅니다.\n📅 현재 시간: {now.strftime('%H:%M:%S')}",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"타임존 저장 중 오류: {e}")
+            await context.bot.send_message(chat_id=query.message.chat_id, text="🚨 시계 설정 저장 중 오류가 발생했습니다.")
+
+async def handle_location_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V7.0] 부장님이 보내주신 GPS 위도/경도를 보고 AI가 전 세계 어디인지 맞추는 스마트 로직입니다.
+    """
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
+    if not update.message.location: return
+
+    lat = update.message.location.latitude
+    lon = update.message.location.longitude
+    
+    await update.message.reply_text("📍 위치 정보 수신 완료! 부장님이 지금 세계 어느 나라에 계시는지 분석 중입니다... 🧐", reply_markup=ReplyKeyboardRemove())
+    
+    try:
+        from ai_processor import chat_with_secretary
+        # 제미나이(AI)에게 좌표 해석을 정교하게 부탁합니다. (JSON 형식으로 유도)
+        prompt = (
+            f"부장님이 현재 위도 {lat}, 경도 {lon} 위치에 계십니다. "
+            f"이 좌표가 속한 '국가명'과 'IANA 타임존 이름(예: Asia/Seoul, Europe/Paris)'을 정확히 알려주세요. "
+            f"반드시 아래 JSON 형식으로만 짧게 답하세요:\n"
+            '{"country": "국가명", "timezone": "타임존이름"}'
+        )
+        
+        ai_response = await asyncio.to_thread(chat_with_secretary, prompt)
+        
+        # AI 결과 파싱
+        import json as pyjson
+        import re
+        match = re.search(r'\{.*\}', ai_response, re.DOTALL)
+        if match:
+            geo_info = pyjson.loads(match.group())
+            country = geo_info.get("country", "알 수 없는 나라")
+            new_tz = geo_info.get("timezone", "UTC")
+            
+            # 1. 파일 저장
+            with open(TIMEZONE_FILE, "w", encoding="utf-8") as f:
+                pyjson.dump({"timezone": new_tz, "country": country}, f, ensure_ascii=False, indent=4)
+            
+            # 2. 즉시 반영
+            import config
+            config.USER_TIMEZONE = new_tz
+            
+            import pytz
+            now = datetime.datetime.now(pytz.timezone(new_tz))
+            
+            await update.message.reply_text(
+                f"🌍 <b>위치 인식 성공!</b>\n\n"
+                f"부장님은 지금 <b>[{country}]</b>에 계시는군요!\n"
+                f"피아니의 시계를 <b>[{new_tz}]</b> 시간대로 맞췄습니다.\n"
+                f"📅 현재 현지 시간: {now.strftime('%Y-%m-%d %H:%M:%S')}",
+                parse_mode="HTML"
+            )
+        else:
+            await update.message.reply_text("🚨 좌표 분석에 실패했습니다. 수동 버튼으로 지역을 선택해 주세요!")
+            
+    except Exception as e:
+        logger.error(f"위치 기반 타임존 분석 중 오류: {e}")
+        await update.message.reply_text("🚨 GPS 정보를 처리하는 도중 오류가 발생했습니다.")
+
 
 async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
     await update.message.reply_text("✅ 🤖 비서 봇이 정상적으로 살아있으며, 열심히 메일을 감시하고 있습니다!")
+
+async def handle_time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V7.0] 부장님의 시계를 세계 어디서든 동기화하는 명령어입니다.
+    수동으로 선택하거나, 핸드폰의 위치(GPS) 정보를 쏘아 자동으로 맞출 수 있습니다.
+    """
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
+    
+    from config import USER_TIMEZONE
+    import pytz
+    
+    try:
+        tz = pytz.timezone(USER_TIMEZONE)
+        now = datetime.datetime.now(tz)
+    except Exception:
+        now = datetime.datetime.now()
+        
+    msg = (
+        f"⏰ <b>피아니 통합 시계 관리 시스템</b>\n\n"
+        f"현재 부장님의 시계는 <b>[{USER_TIMEZONE}]</b> 기준입니다.\n"
+        f"📅 <b>현지 시간:</b> {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        f"아래 버튼을 눌러 피아니의 시계를 바꾸실 수 있습니다. 👇"
+    )
+    
+    # 1. 수동 선택 (인라인 버튼)
+    inline_keyboard = [
+        [
+            InlineKeyboardButton("🇻🇳 베트남 (Ho Chi Minh)", callback_data="tz_Asia/Ho_Chi_Minh"),
+            InlineKeyboardButton("🇰🇷 한국 (Seoul)", callback_data="tz_Asia/Seoul")
+        ]
+    ]
+    inline_markup = InlineKeyboardMarkup(inline_keyboard)
+    
+    # 2. 위치 자동 인식 (리플라이 키보드 - 위치 전송 요청)
+    # 한 번만 쓰고 사라지게(one_time_keyboard) 설정합니다.
+    location_keyboard = [[KeyboardButton("📍 현재 내 위치 전송 (GPS)", request_location=True)]]
+    location_markup = ReplyKeyboardMarkup(location_keyboard, resize_keyboard=True, one_time_keyboard=True)
+    
+    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=location_markup)
+    await update.message.reply_text("수동으로 선택하시려면 아래 버튼을 눌러주세요:", reply_markup=inline_markup)
 
 async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -479,6 +605,13 @@ def setup_telegram_handlers(application: Application):
     application.add_handler(CommandHandler("update", handle_update_command))
     application.add_handler(CommandHandler("help", handle_help_command))
     application.add_handler(CommandHandler("notelist", handle_export_notes))
+    
+    # [V7.0] 시간 시계 관리 명령어 (메뉴 호출)
+    application.add_handler(CommandHandler("time", handle_time_command))
+    application.add_handler(CommandHandler("timeupdate", handle_time_command))
+
+    # [V7.0] 스마트폰 GPS 위치 공유 수신기
+    application.add_handler(MessageHandler(filters.LOCATION, handle_location_update))
     
     # 인라인 버튼(문서 저장 등) 콜백 처리를 위한 리스너입니다.
     application.add_handler(CallbackQueryHandler(handle_button_callback))

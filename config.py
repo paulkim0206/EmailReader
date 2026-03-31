@@ -16,6 +16,24 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# [V7.0] 사용자 맞춤형 타임존 설정 및 영구 저장 파일 경로
+TIMEZONE_FILE = os.path.join(BASE_DIR, "data", "timezone.json")
+
+def get_current_timezone():
+    # 1. 부장님이 명령어로 바꾼 설정 파일이 있는지 먼저 확인 (최우선)
+    if os.path.exists(TIMEZONE_FILE):
+        try:
+            import json
+            with open(TIMEZONE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data.get("timezone", "Asia/Ho_Chi_Minh")
+        except Exception:
+            pass
+    # 2. 파일이 없으면 .env 설정 또는 베트남(호치민) 기본값 사용
+    return os.getenv("USER_TIMEZONE", "Asia/Ho_Chi_Minh")
+
+USER_TIMEZONE = get_current_timezone()
+
 # 프로젝트 최상위 경로
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
