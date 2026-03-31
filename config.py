@@ -16,8 +16,8 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
-# [V11.2] 부장님의 지침에 따른 AI 엔진 서열 정리 (3.0 주력 / 2.5 예비)
-PRIMARY_MODEL = "gemini-3-flash-preview"
+# [V11.2] 부장님의 지침에 따른 AI 엔진 서열 정리 (2.5 전면 배치)
+PRIMARY_MODEL = "gemini-2.5-flash"
 BACKUP_MODEL = "gemini-2.5-flash"
 
 # 프로젝트 최상위 경로
