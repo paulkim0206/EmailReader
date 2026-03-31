@@ -7,10 +7,10 @@ import json
 import os
 import re
 from bs4 import BeautifulSoup
-from config import IMAP_SERVER, IMAP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD, logger, BASE_DIR
+from config import IMAP_SERVER, IMAP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD, logger, BASE_DIR, PROCESSED_UIDS_FILE
 
 # 이미 처리된 메일 번호들을 안전하게 저장해둘 메모장(파일)의 경로입니다.
-UID_FILE = os.path.join(BASE_DIR, "processed_uids.json")
+UID_FILE = PROCESSED_UIDS_FILE
 
 def load_processed_uids():
     """이미 처리된 이메일의 고유 번호 목록을 불러오는 함수입니다."""
