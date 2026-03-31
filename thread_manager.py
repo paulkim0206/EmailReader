@@ -124,3 +124,33 @@ def get_thread_msg_id(thread_key):
     if thread_key in threads:
         return threads[thread_key].get("msg_id")
     return None
+
+def get_summaries_all_by_date(target_date: str) -> list:
+    """
+    [V9.0 리포트 전용] 장부(thread_memory.json)를 샅샅이 뒤져
+    특정 날짜(YYYY-MM-DD)와 일치하는 모든 요약본을 수집하여 리스트로 반환합니다.
+    """
+    threads = load_threads()
+    results = []
+    
+    for thread_key, data in threads.items():
+        history = data.get("summary_history", [])
+        for entry in history:
+            if isinstance(entry, dict):
+                # 날짜가 일치하는 경우만 수집
+                if entry.get("date") == target_date:
+                    results.append({
+                        "subject": thread_key,
+                        "summary": entry.get("summary", "")
+                    })
+            else:
+                # 구형 데이터(단순 문자열)인 경우 상위 last_date를 참고합니다.
+                last_date_str = data.get("last_date", "")
+                if last_date_str.startswith(target_date):
+                    results.append({
+                        "subject": thread_key,
+                        "summary": entry
+                    })
+                    
+    return results
+

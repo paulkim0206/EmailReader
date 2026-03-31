@@ -65,6 +65,9 @@ USER_CORRECTIONS_FILE = os.path.join(BASE_DIR, "data", "user_corrections.json")
 # [V3.3] 피아니 페르소나 및 외부 프롬프트 텍스트가 담긴 폴더 경로 세팅
 PROMPTS_DIR = os.path.join(BASE_DIR, "prompts")
 
+# [V9.0] 주 단위 통합 비즈니스 리포트 저장 폴더 세팅
+REPORTS_DIR = os.path.join(BASE_DIR, "data", "reports")
+
 # 전역 로거(Logger) 설정 함수
 def setup_logger():
     # 로거 인스턴스 생성

@@ -1,7 +1,8 @@
-import asyncio
-import os
+import datetime
+import json
+import pytz
 from telegram.ext import Application
-from config import TELEGRAM_BOT_TOKEN, logger
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, USER_TIMEZONE, REPORTS_DIR, BASE_DIR
 
 # 앞서 우리가 정성껏 만든 주요 도구들을 하나의 커다란 공장 상자로 불러옵니다!
 from mail_parser import fetch_unseen_emails, save_processed_uid
@@ -9,8 +10,74 @@ from ai_processor import process_email_with_ai
 from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, escape_for_tg
 from thread_manager import format_threads_for_prompt, save_thread_entry, get_thread_msg_id
 from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue
+from report_manager import update_daily_report, generate_weekly_summary
+
+# 중복 보고 방지를 위한 기록 파일 경로
+LAST_REPORT_LOG = os.path.join(BASE_DIR, "data", "last_report.json")
+
+async def handle_scheduled_reports(application: Application):
+    """
+    [V9.0] 매일/매주 오전 6시가 되면 보고서를 작성하여 부장님께 배달합니다.
+    """
+    try:
+        # 1. 부장님 시간대로 현재 시각 확인
+        tz = pytz.timezone(USER_TIMEZONE)
+        now = datetime.datetime.now(tz)
+        today_str = now.strftime("%Y-%m-%d")
+        
+        # 06시 정각~07시 사이인지 확인
+        if now.hour != 6:
+            return
+
+        # 2. 이미 보고했는지 장부 확인
+        if os.path.exists(LAST_REPORT_LOG):
+            with open(LAST_REPORT_LOG, "r") as f:
+                last_log = json.load(f)
+                if last_log.get("date") == today_str:
+                    return # 오늘 이미 보고 완료
+
+        logger.info(f"⏰ 오전 6시 정각! [{today_str}] 비즈니스 리포트 생성을 시작합니다.")
+
+        # 3. 일일 보고서 생성 (어제 메일 요약)
+        daily_json = await asyncio.to_thread(update_daily_report)
+        
+        if daily_json:
+            msg = "☀️ <b>[피아니] 일일 비즈니스 리포트 (어제자)</b>\n\n"
+            for topic in daily_json.get("topics", []):
+                msg += f"📌 <b>{topic['category']}</b>\n"
+                for item in topic.get("items", []):
+                    msg += f"- {escape_for_tg(item)}\n"
+                msg += "\n"
+            
+            await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=msg, parse_mode="HTML")
+            logger.info("일일 보고서 텔레그램 발송 완료")
+        
+        # 4. 일요일인 경우 주간 통합 보고서 추가 생성 (월~토)
+        # 0:월, 1:화 ... 5:토, 6:일
+        if now.weekday() == 6:
+            logger.info("📅 오늘은 일요일입니다. 주간 통합 리포트 작성을 시작합니다.")
+            weekly_json = await asyncio.to_thread(generate_weekly_summary)
+            
+            if weekly_json:
+                w_msg = "🏛 <b>[피아니] 주간 비즈니스 트렌드 요약 (월~토)</b>\n\n"
+                w_msg += f"📜 <b>종합 총평:</b>\n{escape_for_tg(weekly_json.get('weekly_summary', ''))}\n\n"
+                w_msg += "🏆 <b>핵심 성과 리스트:</b>\n"
+                for ach in weekly_json.get("key_achievements", []):
+                    w_msg += f"✨ {escape_for_tg(ach)}\n"
+                
+                await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=w_msg, parse_mode="HTML")
+                logger.info("주간 보고서 텔레그램 발송 완료")
+
+        # 5. 장부에 오늘 보고 마쳤다고 기록
+        os.makedirs(os.path.dirname(LAST_REPORT_LOG), exist_ok=True)
+        with open(LAST_REPORT_LOG, "w") as f:
+            json.dump({"date": today_str}, f)
+
+    except Exception as e:
+        logger.error(f"스케줄 보고서 작성 중 오류 발생: {e}")
 
 async def background_mail_checker(application: Application):
+
     """
     공장의 거대한 톱니바퀴 메인 모터입니다! 프로그램이 꺼질 때까지 '무한 루프(끝나지 않는 사이클)'로 돌며,
     1분에 한 번씩만 우체통(메일 서버)을 열어보고 텔레그램 비서에게 건네주는 심장부 역할을 합니다.
@@ -21,6 +88,9 @@ async def background_mail_checker(application: Application):
 
     while True: # 언제 컴퓨터 전원이 뽑히기 전까지는 포기하지 않고 돕니다.
         try:
+            # [V9.0] 매 분마다 현재 시각을 체크하여 오전 6시 보고서 작업 수행
+            await handle_scheduled_reports(application)
+
             # [V1.12.0] 매 사이클 시작 시 재시도 대기열 확인 및 처리
             pending_retries = get_pending_retries()
             if pending_retries:
