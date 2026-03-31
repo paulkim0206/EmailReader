@@ -79,21 +79,19 @@ async def handle_scheduled_reports(application: Application):
         logger.error(f"스케줄 보고서 작성 중 오류 발생: {e}")
 
 async def background_mail_checker(application: Application):
-
     """
-    공장의 거대한 톱니바퀴 메인 모터입니다! 프로그램이 꺼질 때까지 '무한 루프(끝나지 않는 사이클)'로 돌며,
-    1분에 한 번씩만 우체통(메일 서버)을 열어보고 텔레그램 비서에게 건네주는 심장부 역할을 합니다.
+    [V11.0] 피아니의 심장부 메인 엔진입니다. 
+    1분에 한 번씩 메일을 감시하고, 정해진 시간에 일일/주간 보고서를 작성합니다.
     """
-    logger.info("지능형 이메일 비서가 눈을 번쩍 뜨고 24시간 철통 경계 및 업무를 시작합니다!")
+    is_first_run = True
+    logger.info("⚙️ 메일 감시 엔진(Background Checker)이 시동되었습니다. (v11.0)")
     
-    is_first_run = True # 서버가 방금 켜졌는지 확인하는 첫 번째 순찰 티켓입니다.
-
-    while True: # 언제 컴퓨터 전원이 뽑히기 전까지는 포기하지 않고 돕니다.
+    while True:
         try:
-            # [V9.0] 매 분마다 현재 시각을 체크하여 오전 6시 보고서 작업 수행
+            # [V9.0] 매 분마다 현재 시각을 체크하여 보고서 작업 수행
             await handle_scheduled_reports(application)
-
-            # [V1.12.0] 매 사이클 시작 시 재시도 대기열 확인 및 처리
+            
+            # [V1.12.0] 재시도 대기열 확인 및 처리
             pending_retries = get_pending_retries()
             if pending_retries:
                 logger.info(f"재시도 대기열에서 {len(pending_retries)}건 처리 시작...")
@@ -101,130 +99,61 @@ async def background_mail_checker(application: Application):
                     retry_mail = retry_item["mail_data"]
                     retry_uid = retry_item["uid"]
                     thread_history_text = format_threads_for_prompt()
-                    # [V1.12.2] AI 통신 중 봇이 멈추지 않게 백그라운드 스레드로 위임합니다!
                     ai_result = await asyncio.to_thread(process_email_with_ai, retry_mail, thread_history_text)
 
-                    if ai_result.get('is_ai_error'):
-                        # 재시도도 실패 → 사용자에게 최종 오류 알림 전송
-                        logger.warning(f"재시도도 실패. 최종 오류 알림 전송: {retry_mail.get('subject')}")
-                        await application.bot.send_message(
-                            chat_id=str(__import__('config').TELEGRAM_CHAT_ID),
-                            text=(
-                                f"⚠️ <b>AI 요약 최종 실패</b>\n\n"
-                                f"🕒 <b>수신:</b> {escape_for_tg(retry_mail.get('date', ''))}\n"
-                                f"👤 <b>발신:</b> {escape_for_tg(retry_mail.get('sender', ''))}\n"
-                                f"📝 <b>제목:</b> {escape_for_tg(retry_mail.get('subject', ''))}\n\n"
-                                f"AI 서버가 5분 후 재시도에도 응답하지 않았습니다.\n"
-                                f"원본 이메일을 직접 확인해 주십시오."
-                            ),
-                            parse_mode="HTML"
-                        )
-                    else:
-                        # 재시도 성공 → 정상 요약 전송
+                    if not ai_result.get('is_ai_error'):
                         logger.info(f"재시도 성공! 요약 전송: {retry_mail.get('subject')}")
                         thread_key = ai_result.get('thread_key', retry_mail.get('subject', ''))
                         thread_index = ai_result.get('thread_index', 1)
                         is_thread = ai_result.get('is_thread', False)
-                        t_data = {}
-                        if is_thread:
-                            existing_msg_id = get_thread_msg_id(thread_key)
-                            if existing_msg_id:
-                                t_data = {"msg_id": existing_msg_id}
+                        t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
                         await send_email_alert(application, retry_mail, ai_result, t_data, thread_key)
-                        save_thread_entry(
-                            thread_key=thread_key,
-                            thread_index=thread_index,
-                            summary=ai_result.get('summary', ''),
-                            msg_id=t_data.get('msg_id')
-                        )
+                        save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'))
+                        remove_from_retry_queue(retry_uid)
 
-                    # 성공/실패 무관 대기열에서 삭제
-                    remove_from_retry_queue(retry_uid)
-
-
-async def background_mail_checker(application: Application):
-    """
-    [V1.12.2] 1분에 한 번씩 메일함을 확인하는 무한 반복 엔진입니다.
-    """
-    is_first_run = True
-    logger.info("⚙️ 메일 감시 엔진(Background Checker)이 시동되었습니다. (v11.0)")
-    
-    while True:
-        try:
-            # [V9.0] 매일/매주 오전 6시 보고서 체크
-            await handle_scheduled_reports(application)
-            
-            # 피아니가 살아있음을 알리는 심장박동 로그 (app.log 확인용)
+            # [V1.12.2] 새 메일 가져오기
             logger.info("💓 메일함 확인 중... (Scanning for new emails)")
-
-            # [V1.12.2] 메일 수신 중 봇이 멈추지 않게 백그라운드 스레드로 위임합니다!
             unseen_emails = await asyncio.to_thread(fetch_unseen_emails)
             
-            # [아이디어 노트 반영] 서버 켜기 전부터 쌓여있던 안 읽은 메일은 알람을 보내지 않고 일괄 무시 처리합니다.
+            # [V10.0] 서버 재시작 시 과거 메일 도배 방지 로직
             if is_first_run:
                 if unseen_emails:
                     for mail_data in unseen_emails:
                         save_processed_uid(mail_data['uid'])
-                    logger.info(f"서버 가동 전의 {len(unseen_emails)}통의 메일은 조용히 장부에 기록(무시)했습니다.")
+                    logger.info(f"서버 가동 전의 {len(unseen_emails)}통의 메일은 기록만 남기고 알림 없이 무시했습니다.")
                 is_first_run = False
-                logger.info("모든 준비 완료! 이제부터 실시간으로 새 이메일을 보고합니다.")
+                logger.info("✅ 모든 시동 준비가 완료되었습니다. 이제부터 실시간 감시를 시작합니다.")
                 await asyncio.sleep(10)
                 continue
 
-            if unseen_emails:
-                logger.info(f"앗! 주인님에게 {len(unseen_emails)}통의 새로운 이메일이 왔습니다.")
-                # 1. [V1.11.0] 장부 전체를 인덱스 포함 텍스트로 포맷해서 제미나이에게 던집니다.
+            # 새 메일 처리
+            for mail_data in unseen_emails:
                 thread_history_text = format_threads_for_prompt()
-
-                # 2. 제미나이가 원본+장부를 읽고 모든 판단을 합니다.
-                # [V1.12.2] AI 통신 중 봇이 멈추지 않게 백그라운드 스레드로 위임
                 ai_result = await asyncio.to_thread(process_email_with_ai, mail_data, thread_history_text)
 
-                # 3. AI 판단 결과에 따라 처리합니다.
                 if ai_result.get('status') == '스킵':
-                    logger.info(f"AI 판단: 학습된 패턴에 의해 스킵 (제목: {mail_data.get('subject')})")
+                    logger.info(f"AI 판단: 학습 패턴에 의해 스킵 ({mail_data.get('subject')})")
                     await send_skip_alert(application, mail_data, ai_result)
-
                 elif ai_result.get('is_ai_error'):
-                    # AI 12회 전부 실패 → 재시도 대기열에 조용히 저장, 텔레그램 알림 없음
-                    logger.warning(f"AI 전체 실패. 재시도 대기열 등록: {mail_data.get('subject')}")
+                    logger.warning(f"AI 실패 → 재시도 대기열 등록: {mail_data.get('subject')}")
                     add_to_retry_queue(mail_data)
-
                 else:
                     thread_key = ai_result.get('thread_key', mail_data.get('subject', ''))
                     thread_index = ai_result.get('thread_index', 1)
                     is_thread = ai_result.get('is_thread', False)
-
-                    # 핑퐁이면 기존 텔레그램 말풍선 ID를 가져와 답장으로 연결합니다.
-                    t_data = {}
-                    if is_thread:
-                        existing_msg_id = get_thread_msg_id(thread_key)
-                        if existing_msg_id:
-                            t_data = {"msg_id": existing_msg_id}
-
+                    t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
+                    
                     await send_email_alert(application, mail_data, ai_result, t_data, thread_key)
-
-                    # 5. 제미나이가 알려준 인덱스와 요약을 장부에 저장합니다. (서기 역할)
-                    # send_email_alert 내부에서 첫 말풍선 ID를 t_data["msg_id"]에 채워줍니다.
-                    save_thread_entry(
-                        thread_key=thread_key,
-                        thread_index=thread_index,
-                        summary=ai_result.get('summary', ''),
-                        msg_id=t_data.get('msg_id')
-                    )
-
-                # 6. 중복 처리 방지를 위해 처리 완료 UID를 기록합니다.
+                    save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'))
+                
                 save_processed_uid(mail_data['uid'])
 
-            # 한 바퀴 싹 돌았으니, 1분(60초) 동안 공장의 과부하를 막고 인터넷 서버가 화나지 않게 숨을 고릅니다.
+            # 1분 대기
             await asyncio.sleep(60)
 
         except Exception as e:
-            # 매우 중요: 예상치 못한 인터넷 선 고장 같은 치명적인 폭풍우(에러)가 와도
-            # 컴퓨터 프로그램이 오류창을 띄우며 허무하게 완전히 죽어서 꺼져버리지 않도록 막아주는 최후의 '심폐소생술 방어막'입니다.
-            logger.error(f"메일 확인 중 심각한 폭풍우(오류)가 몰아쳤습니다!: {e}")
-            logger.warning("시스템이 완전히 망가지는 걸 방어하기 위해 잠시 5분 동안 땅굴에 대피(대기) 후 다시 밖으로 나옵니다!")
-            await asyncio.sleep(300) # 300초 = 치명적 오류 후 시스템 안정을 위한 5분 긴급 휴식 시간
+            logger.error(f"메일 엔진 내부 오류 발생: {e}")
+            await asyncio.sleep(300) # 오류 시 5분 휴식
 
 async def main():
     """
