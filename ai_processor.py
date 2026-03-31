@@ -157,11 +157,11 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
     except Exception:
         chat_context = ""
 
-    # [V4.2] 메모 지시사항 및 최근 수첩 내용을 불러옵니다.
+    # [V8.0] 메모 지시사항 및 수첩 전체(미완료) 내용을 불러옵니다.
     try:
-        from memo_manager import get_recent_memos
+        from memo_manager import get_active_memos_text
         memo_prompt = load_prompt("memo_instruction.txt")
-        recent_memos_text = get_recent_memos(limit=10)
+        recent_memos_text = get_active_memos_text()
     except Exception:
         memo_prompt = ""
         recent_memos_text = ""

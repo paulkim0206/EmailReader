@@ -90,8 +90,24 @@ def update_memo(memo_id: int, new_content: str) -> bool:
     except Exception:
         return False
 
+def get_active_memos_text() -> str:
+    """[V8.0] 부장님이 아직 끝내지 않은(active) 메모만 전체를 텍스트로 뽑아냅니다. AI 브리핑용입니다."""
+    try:
+        notes = _load_notes()
+        active_notes = [n for n in notes if n.get('status') == 'active']
+        
+        if not active_notes:
+            return "(현재 완료되지 않은 메모가 하나도 없습니다. 수첩이 깨끗하네요! ✨)"
+            
+        result = "[부장님의 미완료 수첩 목록]\n"
+        for note in active_notes:
+            result += f"- {note.get('id', '?')}번: {note['content']} (등록: {note['timestamp']})\n"
+        return result.strip()
+    except Exception as e:
+        return f"🚨 미완료 수첩 읽기 실패: {e}"
+
 def get_all_memos() -> str:
-    """`/수첩` 명령어 발동 시, 전체 장부를 텍스트로 뽑아냅니다."""
+    """`/notelist` 명령어 발동 시, 전체 장부를 텍스트로 뽑아냅니다."""
     notes = _load_notes()
     if not notes: return "수첩이 비어있습니다."
     
