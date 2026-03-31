@@ -1,36 +1,36 @@
-# [문서] 사용자 개인 기록 문서 (내 PC에만 유지, 깃허브/클라우드 업로드 차단)
-*.md
-!README.md
-!GEMINI.md
-
 # [보안] 환경 변수 및 비밀번호
 .env
 
-# [로그] 실행 기록 및 분석 로그
+# [데이터 금고] 서버에서 실시간으로 생성/업데이트되는 장부들
+# (부장님의 IDE와 서버 데이터가 섞이지 않도록 폴더째로 격리합니다)
+data/
+logs/
+Email_Reports/
+Saved_Reports/
+
+# [로그] 개별 로그 파일 (루트에 남은 잔재들 차단)
 app.log
 *.log
 
-# [데이터] 로컬 장부 및 처리 기록 (내 컴퓨터에만 유지)
+# [데이터] 파일 확장자 기반 2차 방어
 *.json
 !requirements.json
 !package.json
 
-# [보고서] 자동으로 생성된 메일 요약 보고서 폴더
-Email_Reports/
+# [문서] 사용자 개인 기록 및 노트
+Personal_Note/
+*.md
+!README.md
+!GEMINI.md
+!IDEA_NOTE.md
 
-# [빌드/배포] 실행 파일 및 빌드 폴더
-*.exe
-*.spec
+# [파이썬/빌드] 캐시 및 실행 파일
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
 build/
 dist/
-
-# [파이썬 최적화] 가상환경 및 캐시
-.venv/
-__pycache__/
-*.pyc
-*.pyo
+*.exe
+*.spec
 .python-version
-
-# 기타 사용자 정의
-Personal_Note/
-
