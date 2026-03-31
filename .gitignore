@@ -17,7 +17,6 @@ app.log
 
 # [보고서] 자동으로 생성된 메일 요약 보고서 폴더
 Email_Reports/
-Saved_Reports/
 
 # [빌드/배포] 실행 파일 및 빌드 폴더
 *.exe

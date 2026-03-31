@@ -41,7 +41,8 @@ def add_to_retry_queue(mail_data: dict):
     queue.append({
         "uid": uid,
         "mail_data": mail_data,
-        "retry_after": retry_after
+        "retry_after": retry_after,
+        "retry_count": 1  # [V11.2] 최초 실패 시 1회차로 등록
     })
     save_retry_queue(queue)
     logger.info(f"재시도 대기열 등록 완료: '{mail_data.get('subject', '')}' → {RETRY_WAIT_MINUTES}분 후 재시도 예정")
@@ -62,6 +63,22 @@ def get_pending_retries():
         except Exception:
             pass
     return pending
+
+
+def update_retry_status(uid: str, delay_minutes: int):
+    """
+    [V11.2] 재시도 실패 시 회차를 1 늘리고, 다음 시도 시각을 설정합니다.
+    """
+    queue = load_retry_queue()
+    for item in queue:
+        if item.get("uid") == uid:
+            item["retry_count"] = item.get("retry_count", 1) + 1
+            item["retry_after"] = (
+                datetime.datetime.now() + datetime.timedelta(minutes=delay_minutes)
+            ).isoformat()
+            break
+    save_retry_queue(queue)
+    logger.info(f"재시도 상태 업데이트: UID {uid} → {delay_minutes}분 뒤 {item['retry_count']}회차 시도 예정")
 
 
 def remove_from_retry_queue(uid: str):

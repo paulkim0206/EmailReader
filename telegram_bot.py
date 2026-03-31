@@ -9,7 +9,7 @@ import json
 import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, CommandHandler, MessageHandler, filters
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, IDEA_NOTE_FILE, TIMEZONE_FILE, USER_TIMEZONE
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, TIMEZONE_FILE, USER_TIMEZONE
 from local_storage import create_and_save_report
 
 # 전 세계의 모든 사용자 중, 오직 '나(등록된 소유자)'에게만 알림을 보내고 명령을 받기 위한 검증용 정보입니다.
@@ -131,6 +131,29 @@ async def send_skip_alert(application: Application, mail_data: dict, ai_result: 
     except Exception as e:
         logger.error(f"스킵 알림 전송 실패: {e}")
 
+async def send_failure_alert(application: Application, mail_data: dict, retry_count: int):
+    """
+    [V11.2] 주력/백업 엔진 모두 고군분투했으나 결국 실패했을 때 부장님께 정중하게 보고합니다.
+    """
+    message_text = (
+        f"🚨 <b>업무 보고: AI 요약 최종 실패</b>\n\n"
+        f"부장님, 주력 엔진(3.0)과 백업 엔진(2.5)을 동원하여 총 {retry_count}회 시도했으나, "
+        f"서버 장애로 인해 아래 메일의 요약에 성공하지 못했습니다. 😭\n\n"
+        f"📝 <b>메일 제목:</b> {escape_for_tg(mail_data.get('subject', ''))}\n"
+        f"👤 <b>보낸 사람:</b> {escape_for_tg(mail_data.get('sender', ''))}\n\n"
+        f"번거로우시겠지만 직접 확인을 부탁드립니다. 죄송합니다!"
+    )
+    
+    try:
+        await application.bot.send_message(
+            chat_id=ALLOWED_CHAT_ID,
+            text=message_text,
+            parse_mode="HTML"
+        )
+        logger.info(f"최종 실패 알림 전송 완료 (UID: {mail_data.get('uid')})")
+    except Exception as e:
+        logger.error(f"최종 실패 알림 전송 실패: {e}")
+
 async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     사용자가 텔레그램 대화방에서 [마크다운 문서로 저장하기] 버튼을 띡! 눌렀을 때만 작동하는 '동작 감지기'입니다.
@@ -229,12 +252,17 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         cache_data = temp_mail_cache.get(uid)
         
         if cache_data:
-            logger.info(f"강제 요약 요청 접수 (UID: {uid})")
-            # 1. 화면에 "공사 중..." 표시
-            await query.edit_message_text(
-                text=f"{query.message.text}\n\n⏳ <b>부장님 명령 접수! 강제로 다시 분석 중입니다...</b>",
-                parse_mode="HTML"
-            )
+            # [V11.1] 텔레그램 특수문자(<, >) 파싱 에러 방지를 위해 기존 메시지 텍스트를 안전하게 보호(Escape)합니다.
+            safe_current_text = escape_for_tg(query.message.text)
+            
+            try:
+                await query.edit_message_text(
+                    text=f"{safe_current_text}\n\n⏳ <b>부장님 명령 접수! 강제로 다시 분석 중입니다...</b>",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                # 이미 텍스트가 수정되었거나 네트워크 문제일 경우 조용히 넘어갑니다.
+                pass
             
             # 2. 강제 요약 수행 (순환 참조 방지를 위해 로컬 임포트)
             from ai_processor import process_email_with_ai
@@ -249,8 +277,11 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             # 3. 분석 완료 시 알림 전송 (t_data는 새로 생성)
             await send_email_alert(context.application, mail_data, new_ai_result, {}, mail_data.get('subject'))
             
-            # 4. 기존 스킵 버튼은 지워줍니다.
-            await query.edit_message_reply_markup(reply_markup=None)
+            # 4. 기존 스킵 버튼은 지워줍니다 (실패해도 무관하므로 예외 처리).
+            try:
+                await query.edit_message_reply_markup(reply_markup=None)
+            except Exception:
+                pass
         else:
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
@@ -503,100 +534,140 @@ async def handle_update_command(update: Update, context: ContextTypes.DEFAULT_TY
         logger.error(f"업데이트 중 알 수 없는 오류 발생: {e}")
         await update.message.reply_text(f"🚨 업데이트 중 오류가 발생했습니다: {e}")
 
+async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+    """
+    [V11.5] AI 답변 속에 숨겨진 명령 태그([[LEARN]], [[SAVE_MEMO]] 등)를 전문적으로 처리하는 청소기이자 실행기입니다.
+    기존에 handle_normal_chat에 길게 늘어져 있던 중복 로직을 이곳으로 통합했습니다.
+    """
+    # 1. 오답 노트 학습 태그 ([[LEARN]]...[[/LEARN]])
+    learn_match = re.search(r'\[\[LEARN\]\](.*?)\[\[/LEARN\]\]', ai_reply, re.DOTALL)
+    if learn_match:
+        rule_text = learn_match.group(1).strip()
+        from feedback_manager import add_correction
+        add_correction(rule_text)
+        ai_reply = re.sub(r'\[\[LEARN\]\].*?\[\[/LEARN\]\]', '', ai_reply, flags=re.DOTALL).strip()
+        ai_reply += f"\n\n*(✅ 비서가 방금 지적하신 내용을 오답 노트 장부에 영구 기록하여 학습했습니다!)*"
+
+    # 2. 메모(수첩) 관련 태그
+    memo_match = re.search(r'\[\[SAVE_MEMO\]\](.*?)\[\[/SAVE_MEMO\]\]', ai_reply, re.DOTALL)
+    if memo_match:
+        from memo_manager import save_memo
+        save_memo(memo_match.group(1).strip())
+        ai_reply = re.sub(r'\[\[SAVE_MEMO\]\].*?\[\[/SAVE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
+
+    del_match = re.search(r'\[\[DELETE_MEMO\]\](.*?)\[\[/DELETE_MEMO\]\]', ai_reply, re.DOTALL)
+    if del_match:
+        try:
+            target_id = int(del_match.group(1).strip())
+            from memo_manager import delete_memo
+            delete_memo(target_id)
+        except ValueError: pass
+        ai_reply = re.sub(r'\[\[DELETE_MEMO\]\].*?\[\[/DELETE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
+
+    upd_match = re.search(r'\[\[UPDATE_MEMO\]\](.*?)\[\[/UPDATE_MEMO\]\]', ai_reply, re.DOTALL)
+    if upd_match:
+        payload = upd_match.group(1).strip()
+        if "|" in payload:
+            try:
+                parts = payload.split('|', 1)
+                target_id = int(parts[0].strip())
+                new_content = parts[1].strip()
+                from memo_manager import update_memo
+                update_memo(target_id, new_content)
+            except ValueError: pass
+        ai_reply = re.sub(r'\[\[UPDATE_MEMO\]\].*?\[\[/UPDATE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
+
+    # 3. 온디맨드 보고서 생성 태그
+    if "[[GENERATE_DAILY_REPORT]]" in ai_reply:
+        from report_manager import update_daily_report
+        date_match = re.search(r"\[\[GENERATE_DAILY_REPORT\]\]\s*(.*?)\s*\[\[/GENERATE_DAILY_REPORT\]\]", ai_reply)
+        if date_match:
+            target_date = date_match.group(1).strip()
+            logger.info(f"온디맨드 일일 보고서 생성 시작: {target_date}")
+            report_data = await asyncio.to_thread(update_daily_report, target_date)
+            
+            if report_data:
+                summary_msg = f"✅ <b>{target_date} 일일 업무 보고서 생성을 완료했습니다!</b>\n\n"
+                summary_msg += f"🧐 <b>전략적 총평:</b>\n{report_data.get('전략적 총평', '분석 중...')}\n\n"
+                
+                if "topics" in report_data:
+                    for topic in report_data["topics"]:
+                        summary_msg += f"📌 <b>{topic.get('category', '분류 미상')}:</b> {', '.join(topic.get('items', []))}\n"
+                
+                if report_data.get("urgent_actions"):
+                    summary_msg += "\n🚩 <b>긴급 조치 요구:</b>\n"
+                    for action in report_data["urgent_actions"]:
+                        summary_msg += f"- {action}\n"
+                
+                summary_msg += f"\n정해진 경로(`Email_Reports/` 및 `data/reports/`)에 안전하게 보관했습니다. 📋✨"
+                await update.message.reply_text(summary_msg, parse_mode="HTML")
+            else:
+                await update.message.reply_text(f"⚠️ {target_date}의 데이터가 없어 보고서를 생성하지 못했습니다.")
+        ai_reply = re.sub(r"\[\[GENERATE_DAILY_REPORT\]\].*?\[\[/GENERATE_DAILY_REPORT\]\]", "", ai_reply, flags=re.DOTALL).strip()
+
+    if "[[GENERATE_WEEKLY_REPORT]]" in ai_reply:
+        from report_manager import generate_weekly_summary
+        logger.info("온디맨드 주간 보고서 생성 시작")
+        report_data = await asyncio.to_thread(generate_weekly_summary)
+        
+        if report_data:
+            summary_msg = f"✅ <b>금주 주간 업무 보고서 작성을 완료했습니다!</b>\n\n"
+            summary_msg += f"📊 <b>주간 전술적 분석:</b>\n{report_data.get('주간 전술적 분석', '분석 완료')}\n\n"
+            
+            if "key_achievements" in report_data:
+                summary_msg += "🏆 <b>핵심 추진 성과:</b>\n"
+                for item in report_data["key_achievements"]:
+                    summary_msg += f"- {item}\n"
+            
+            summary_msg += f"\n부장님의 전략적 의사결정을 돕기 위해 최선을 다해 분석했습니다. 수고하셨습니다! 👍"
+            await update.message.reply_text(summary_msg, parse_mode="HTML")
+        else:
+            await update.message.reply_text("⚠️ 주간 보고서 생성을 위한 데이터가 부족합니다.")
+        ai_reply = re.sub(r"\[\[GENERATE_WEEKLY_REPORT\]\].*?\[\[/GENERATE_WEEKLY_REPORT\]\]", "", ai_reply, flags=re.DOTALL).strip()
+
+    return ai_reply
+
 async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    [V3.0 대화형 비서 기능]
-    사용자가 명령어가 아닌 일반 대화(예: "안녕?", "오늘 날씨 어때?")를 입력했을 때 작동합니다.
-    제미나이 AI가 비서의 자아로 답장합니다.
+    [V11.5] 명령 태그 처리기 분리로 슬림해진 대화형 비서 기능
     """
-    if str(update.message.chat_id) != ALLOWED_CHAT_ID:
-        return
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
 
     user_text = update.message.text
     
-    # [V5.0] 장기 기억을 위해 부장님의 말씀을 즉시 장부에 기록합니다.
+    # 1. 사용자 말씀 기록
     try:
         from chat_manager import save_chat_log
         save_chat_log(role='user', content=user_text)
-    except Exception:
-        pass
+    except Exception: pass
     
-    # [V3.2] 사용자가 이전 메시지에 답장(Reply)을 한 경우 그 텍스트를 파악합니다.
+    # 답장(Reply) 맥락 파악
     replied_text = None
     if update.message.reply_to_message and update.message.reply_to_message.text:
         replied_text = update.message.reply_to_message.text
     
-    # 텔레그램 화면 상단에 "봇이 타이핑 중..." (Typing action)을 띄워 생동감을 줍니다.
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
     
     try:
-        # 비서 AI 뇌(로직)를 불러옵니다.
+        # 2. AI 답변 생성
         from ai_processor import chat_with_secretary
-        
-        # AI가 생각해서 답변을 만들어옵니다. (기다리는 동안 봇이 멈추지 않게 비동기로 처리)
         ai_reply = await asyncio.to_thread(chat_with_secretary, user_text, replied_text)
         
-        # [V3.2] AI의 답변에서 오답 노트 태그([[LEARN]]...[[/LEARN]])를 파싱(추출)합니다.
-        import re
-        learn_match = re.search(r'\[\[LEARN\]\](.*?)\[\[/LEARN\]\]', ai_reply, re.DOTALL)
-        
-        if learn_match:
-            rule_text = learn_match.group(1).strip()
-            
-            # 추출된 규칙을 피드백 매니저를 통해 오답 노트 장부에 영구 저장합니다.
-            from feedback_manager import add_correction
-            add_correction(rule_text)
-            
-            # 태그가 포함된 원본 답변에서 해당 태그 부분만 깔끔하게 지워냅니다.
-            ai_reply = re.sub(r'\[\[LEARN\]\].*?\[\[/LEARN\]\]', '', ai_reply, flags=re.DOTALL).strip()
-            ai_reply += f"\n\n*(✅ 비서가 방금 지적하신 내용을 오답 노트 장부에 영구 기록하여 학습했습니다!)*"
+        # 3. [V11.5 핵심 혁신] AI 답변 내의 명령 태그들을 일괄 처리하고 청소합니다.
+        ai_reply = await _process_ai_tags(ai_reply, update, context)
 
-        # [V4.0 코어 기능 2/2] AI가 스스로 부장님의 메모 지시를 눈치채고 던진 수첩 기록 태그 가로채기!
-        memo_match = re.search(r'\[\[SAVE_MEMO\]\](.*?)\[\[/SAVE_MEMO\]\]', ai_reply, re.DOTALL)
-        if memo_match:
-            memo_text = memo_match.group(1).strip()
-            from memo_manager import save_memo
-            save_memo(memo_text)
-            ai_reply = re.sub(r'\[\[SAVE_MEMO\]\].*?\[\[/SAVE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
-
-        # [V4.2] 삭제 명령 (DELETE_MEMO) 가로채기
-        del_match = re.search(r'\[\[DELETE_MEMO\]\](.*?)\[\[/DELETE_MEMO\]\]', ai_reply, re.DOTALL)
-        if del_match:
-            try:
-                target_id = int(del_match.group(1).strip())
-                from memo_manager import delete_memo
-                delete_memo(target_id)
-            except ValueError: pass
-            ai_reply = re.sub(r'\[\[DELETE_MEMO\]\].*?\[\[/DELETE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
-
-        # [V4.2] 수정 명령 (UPDATE_MEMO) 가로채기
-        upd_match = re.search(r'\[\[UPDATE_MEMO\]\](.*?)\[\[/UPDATE_MEMO\]\]', ai_reply, re.DOTALL)
-        if upd_match:
-            payload = upd_match.group(1).strip()
-            if "|" in payload:
-                try:
-                    parts = payload.split('|', 1)
-                    target_id = int(parts[0].strip())
-                    new_content = parts[1].strip()
-                    from memo_manager import update_memo
-                    update_memo(target_id, new_content)
-                except ValueError: pass
-            ai_reply = re.sub(r'\[\[UPDATE_MEMO\]\].*?\[\[/UPDATE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
-            # 이미 비서가 자연어로 "기억하겠습니다!" 라고 뱉었으므로, 별도의 시스템 메시지는 추가하지 않습니다.
-
-        # [V5.0] 장기 기억을 위해 피아니의 답변도 장부에 기록합니다.
+        # 4. 피아니의 답변 기록
         try:
             from chat_manager import save_chat_log
             save_chat_log(role='assistant', content=ai_reply)
-        except Exception:
-            pass
+        except Exception: pass
 
-        # 만들어진 최종 답변을 텔레그램으로 보냅니다.
+        # 5. 최종 답변 전송
         await update.message.reply_text(ai_reply)
         
     except Exception as e:
         logger.error(f"대화 처리 중 오류: {e}")
-        await update.message.reply_text("🚨 앗, 부장님! 방금 머리가 좀 아파서(서버 오류) 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?")
+        await update.message.reply_text("🚨 앗, 부장님! 방금 머리가 좀 아파서 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?")
 
 def setup_telegram_handlers(application: Application):
     # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note', '/update' 옵션을 박아 넣습니다.

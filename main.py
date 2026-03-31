@@ -9,9 +9,9 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, USER_TIMEZONE, 
 # 앞서 우리가 정성껏 만든 주요 도구들을 하나의 커다란 공장 상자로 불러옵니다!
 from mail_parser import fetch_unseen_emails, save_processed_uid
 from ai_processor import process_email_with_ai
-from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, escape_for_tg
+from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, escape_for_tg, send_failure_alert
 from thread_manager import format_threads_for_prompt, save_thread_entry, get_thread_msg_id
-from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue
+from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue, update_retry_status
 from report_manager import update_daily_report, generate_weekly_summary
 
 # 중복 보고 방지를 위한 기록 파일 경로
@@ -38,37 +38,45 @@ async def handle_scheduled_reports(application: Application):
                 if last_log.get("date") == today_str:
                     return # 오늘 이미 보고 완료
 
-        logger.info(f"⏰ 오전 6시 정각! [{today_str}] 비즈니스 리포트 생성을 시작합니다.")
-
-        # 3. 일일 보고서 생성 (어제 메일 요약)
-        daily_json = await asyncio.to_thread(update_daily_report)
-        
-        if daily_json:
-            msg = "☀️ <b>[피아니] 일일 비즈니스 리포트 (어제자)</b>\n\n"
-            for topic in daily_json.get("topics", []):
-                msg += f"📌 <b>{topic['category']}</b>\n"
-                for item in topic.get("items", []):
-                    msg += f"- {escape_for_tg(item)}\n"
-                msg += "\n"
+        # [V11.4] 부장님의 비즈니스 리듬에 맞춘 정기 보고 체계 (월요일: 주간 보고 / 화~일요일: 일일 보고)
+        if now.weekday() == 0:  # 월요일 (0)
+            logger.info("📅 오늘은 월요일입니다. 지난주 통합 주간 리포트 작성을 시작합니다.")
+            weekly_summary = await asyncio.to_thread(generate_weekly_summary)
             
-            await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=msg, parse_mode="HTML")
-            logger.info("일일 보고서 텔레그램 발송 완료")
-        
-        # 4. 일요일인 경우 주간 통합 보고서 추가 생성 (월~토)
-        # 0:월, 1:화 ... 5:토, 6:일
-        if now.weekday() == 6:
-            logger.info("📅 오늘은 일요일입니다. 주간 통합 리포트 작성을 시작합니다.")
-            weekly_json = await asyncio.to_thread(generate_weekly_summary)
-            
-            if weekly_json:
-                w_msg = "🏛 <b>[피아니] 주간 비즈니스 트렌드 요약 (월~토)</b>\n\n"
-                w_msg += f"📜 <b>종합 총평:</b>\n{escape_for_tg(weekly_json.get('weekly_summary', ''))}\n\n"
-                w_msg += "🏆 <b>핵심 성과 리스트:</b>\n"
-                for ach in weekly_json.get("key_achievements", []):
-                    w_msg += f"✨ {escape_for_tg(ach)}\n"
+            if weekly_summary:
+                msg = "📊 <b>[피아니] 주간 업무 총괄 리포트 (지난주 월~토)</b>\n\n"
+                msg += f"🧐 <b>주간 전술적 분석:</b>\n{weekly_summary.get('주간 전술적 분석', '분석 완료')}\n\n"
                 
-                await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=w_msg, parse_mode="HTML")
+                if "key_achievements" in weekly_summary:
+                    msg += "🏆 <b>핵심 추진 성과:</b>\n"
+                    for item in weekly_summary["key_achievements"]:
+                        msg += f"- {escape_for_tg(item)}\n"
+                
+                msg += "\n실무가 시작되는 월요일입니다. 부장님, 이번 주도 건승하십시오! 👍"
+                await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=msg, parse_mode="HTML")
                 logger.info("주간 보고서 텔레그램 발송 완료")
+        else:
+            # 화~일요일 (1~6): 어제의 업무를 요약하는 일일 보고서를 작성합니다.
+            logger.info(f"⏰ {now.strftime('%A')} 아침! 일일 비즈니스 리포트 생성을 시작합니다.")
+            daily_json = await asyncio.to_thread(update_daily_report)
+            
+            if daily_json:
+                msg = f"☀️ <b>[피아니] 일일 비즈니스 리포트 ({now.strftime('%Y-%m-%d')})</b>\n\n"
+                msg += f"🧐 <b>전략적 총평:</b>\n{daily_json.get('전략적 총평', '분석 완료')}\n\n"
+                
+                for topic in daily_json.get("topics", []):
+                    msg += f"📌 <b>{topic['category']}</b>\n"
+                    for item in topic.get("items", []):
+                        msg += f"- {escape_for_tg(item)}\n"
+                    msg += "\n"
+                
+                if "urgent_actions" in daily_json and daily_json["urgent_actions"]:
+                    msg += "🚩 <b>긴급 조치 요구:</b>\n"
+                    for action in daily_json["urgent_actions"]:
+                        msg += f"- {escape_for_tg(action)}\n"
+                
+                await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=msg, parse_mode="HTML")
+                logger.info("일일 보고서 텔레그램 발송 완료")
 
         # 5. 장부에 오늘 보고 마쳤다고 기록
         os.makedirs(os.path.dirname(LAST_REPORT_LOG), exist_ok=True)
@@ -96,20 +104,38 @@ async def background_mail_checker(application: Application):
             if pending_retries:
                 logger.info(f"재시도 대기열에서 {len(pending_retries)}건 처리 시작...")
                 for retry_item in pending_retries:
-                    retry_mail = retry_item["mail_data"]
-                    retry_uid = retry_item["uid"]
-                    thread_history_text = format_threads_for_prompt()
-                    ai_result = await asyncio.to_thread(process_email_with_ai, retry_mail, thread_history_text)
+                    try:
+                        retry_mail = retry_item["mail_data"]
+                        retry_uid = retry_item["uid"]
+                        retry_count = retry_item.get("retry_count", 1)
+                        thread_history_text = format_threads_for_prompt()
+                        
+                        # [V11.2] 현재 회차(retry_count)를 함께 넘겨 엔진을 선택하게 합니다.
+                        ai_result = await asyncio.to_thread(process_email_with_ai, retry_mail, thread_history_text, retry_count=retry_count)
 
-                    if not ai_result.get('is_ai_error'):
-                        logger.info(f"재시도 성공! 요약 전송: {retry_mail.get('subject')}")
-                        thread_key = ai_result.get('thread_key', retry_mail.get('subject', ''))
-                        thread_index = ai_result.get('thread_index', 1)
-                        is_thread = ai_result.get('is_thread', False)
-                        t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
-                        await send_email_alert(application, retry_mail, ai_result, t_data, thread_key)
-                        save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'))
-                        remove_from_retry_queue(retry_uid)
+                        if not ai_result.get('is_ai_error'):
+                            logger.info(f"✅ [{retry_count}회차] 재시도 성공! 요약 전송: {retry_mail.get('subject')}")
+                            thread_key = ai_result.get('thread_key', retry_mail.get('subject', ''))
+                            thread_index = ai_result.get('thread_index', 1)
+                            is_thread = ai_result.get('is_thread', False)
+                            t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
+                            
+                            await send_email_alert(application, retry_mail, ai_result, t_data, thread_key)
+                            save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'))
+                            remove_from_retry_queue(retry_uid)
+                        else:
+                            # [V11.2] 재시도 실패 시 후속 조치 (3+3 전략)
+                            if retry_count >= 6:
+                                logger.error(f"❌ 6회 모두 실패! 최종 포기: {retry_mail.get('subject')}")
+                                await send_failure_alert(application, retry_mail, retry_count)
+                                remove_from_retry_queue(retry_uid)
+                            else:
+                                # 3회차 실패 시 5분 휴식, 그 외엔 1분 뒤 재시도
+                                delay = 5 if retry_count == 3 else 1
+                                update_retry_status(retry_uid, delay)
+                    except Exception as re:
+                        logger.error(f"재시도 처리 중 개별 오류 발생 (스킵하고 다음 진행): {re}")
+                        continue
 
             # [V1.12.2] 새 메일 가져오기
             logger.info("💓 메일함 확인 중... (Scanning for new emails)")
@@ -128,25 +154,30 @@ async def background_mail_checker(application: Application):
 
             # 새 메일 처리
             for mail_data in unseen_emails:
-                thread_history_text = format_threads_for_prompt()
-                ai_result = await asyncio.to_thread(process_email_with_ai, mail_data, thread_history_text)
+                try:
+                    thread_history_text = format_threads_for_prompt()
+                    ai_result = await asyncio.to_thread(process_email_with_ai, mail_data, thread_history_text)
 
-                if ai_result.get('status') == '스킵':
-                    logger.info(f"AI 판단: 학습 패턴에 의해 스킵 ({mail_data.get('subject')})")
-                    await send_skip_alert(application, mail_data, ai_result)
-                elif ai_result.get('is_ai_error'):
-                    logger.warning(f"AI 실패 → 재시도 대기열 등록: {mail_data.get('subject')}")
-                    add_to_retry_queue(mail_data)
-                else:
-                    thread_key = ai_result.get('thread_key', mail_data.get('subject', ''))
-                    thread_index = ai_result.get('thread_index', 1)
-                    is_thread = ai_result.get('is_thread', False)
-                    t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
+                    if ai_result.get('status') == '스킵':
+                        logger.info(f"🙈 AI 판단: 학습 패턴에 의해 스킵 ({mail_data.get('subject')})")
+                        await send_skip_alert(application, mail_data, ai_result)
+                    elif ai_result.get('is_ai_error'):
+                        logger.warning(f"⚠️ AI 실패 → 재시도 대기열 등록: {mail_data.get('subject')}")
+                        add_to_retry_queue(mail_data)
+                    else:
+                        thread_key = ai_result.get('thread_key', mail_data.get('subject', ''))
+                        thread_index = ai_result.get('thread_index', 1)
+                        is_thread = ai_result.get('is_thread', False)
+                        t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
+                        
+                        await send_email_alert(application, mail_data, ai_result, t_data, thread_key)
+                        save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'))
                     
-                    await send_email_alert(application, mail_data, ai_result, t_data, thread_key)
-                    save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'))
-                
-                save_processed_uid(mail_data['uid'])
+                    # [V11.1] 모든 분석 과정이 '무사히' 끝나거나 대기열에 안전하게 들어갔을 때만 처리 완료 기록을 남깁니다.
+                    save_processed_uid(mail_data['uid'])
+                except Exception as me:
+                    logger.error(f"메일 개별 처리 중 돌발 오류 (다음 메일로 넘어감): {me}")
+                    continue
 
             # 1분 대기
             await asyncio.sleep(60)

@@ -1,203 +1,193 @@
 import os
 import json
 import time
+import re
+import datetime
+import pytz
 
 from google import genai
 from google.genai import types
-from config import GEMINI_API_KEY, PROMPTS_DIR, logger
+from config import GEMINI_API_KEY, PROMPTS_DIR, logger, PRIMARY_MODEL, BACKUP_MODEL, USER_TIMEZONE
 
-def load_prompt(filename):
-    """V3.3 외부 텍스트(메모장) 프롬프트 파일을 안전하게 읽어오는 헬퍼 함수"""
-    filepath = os.path.join(PROMPTS_DIR, filename)
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return f.read().strip()
-    except Exception as e:
-        logger.error(f"[치명적 오류] 프롬프트 파일({filename})을 찾을 수 없습니다: {e}")
-        return "당신은 부장님을 보조하는 비서입니다. 친절하게 응답하십시오."
+# --- [V11.7] 지능형 지침서(프롬프트) 전용 스마트 메모리 장부 ---
+_PROMPT_CACHE = {} 
 
-def load_ability(ability_name):
-    """[V10.0] abilities 폴더 내의 전문 직무 프롬프트를 읽어옵니다."""
-    filepath = os.path.join(PROMPTS_DIR, "abilities", f"{ability_name}.txt")
+def _read_prompt_file(filename, subfolder=None):
+    """파일의 수정 시간을 체크하여 똑똑하게(캐싱) 읽어오는 공용 헬퍼 함수"""
+    if subfolder:
+        filepath = os.path.join(PROMPTS_DIR, subfolder, filename)
+    else:
+        filepath = os.path.join(PROMPTS_DIR, filename)
+
     try:
+        if not os.path.exists(filepath):
+            return ""
+            
+        # 1. 파일의 '마지막 수정 시간'을 확인합니다.
+        current_mtime = os.path.getmtime(filepath)
+        
+        # 2. 이미 메모리에 있고, 시간이 바뀌지 않았다면? (초고속 반환!)
+        if filepath in _PROMPT_CACHE:
+            cached = _PROMPT_CACHE[filepath]
+            if cached['mtime'] == current_mtime:
+                return cached['content']
+        
+        # 3. 처음 읽거나 내용이 바뀌었다면? (새로 읽고 메모리 업데이트)
         with open(filepath, 'r', encoding='utf-8') as f:
-            return f.read().strip()
+            content = f.read().strip()
+            _PROMPT_CACHE[filepath] = {
+                'content': content,
+                'mtime': current_mtime
+            }
+            # logger.info(f"💡 지침서 최신화 완료: {filename}")
+            return content
+            
     except Exception as e:
-        logger.warning(f"능력치 파일({ability_name}) 로드 실패: {e}")
+        logger.error(f"프롬프트 파일({filename}) 로드 실패: {e}")
         return ""
 
-def process_email_with_ai(mail_data, thread_history_text):
+def _get_now_info():
+    """현재 사용자 시간대의 시각 정보를 비서의 자아에 주입하기 위한 문자열 생성"""
+    try:
+        tz = pytz.timezone(USER_TIMEZONE)
+        now = datetime.datetime.now(tz)
+        return f"\n\n[현재 시간 자각 지침]\n오늘은 {now.strftime('%Y-%m-%d (%A)')} 이며 시각은 {now.strftime('%H:%M:%S')} 입니다."
+    except Exception:
+        return f"\n\n[현재 시간] {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+
+def _clean_ai_json(text):
+    """AI 응답에서 불필요한 마크다운 기호(```json 등)를 제거하고 순수 JSON만 추출"""
+    if not text: return ""
+    return re.sub(r'```json\n?|```', '', text).strip()
+
+# --- [기존 외부 호출 함수 리팩토링] ---
+
+def load_prompt(filename):
+    """외부 텍스트 프롬프트 파일을 읽어옵니다. (호환성 유지)"""
+    return _read_prompt_file(filename)
+
+def load_ability(ability_name):
+    """abilities 폴더 내의 전문 직무 프롬프트를 읽어옵니다. (호환성 유지)"""
+    return _read_prompt_file(f"{ability_name}.txt", subfolder="abilities")
+
+def process_email_with_ai(mail_data, thread_history_text, force_summarize=False, retry_count=1):
     """
-    V10.0: 모듈형 프롬프트 시스템 적용 버전.
-    Persona + Summarizer(Ability) + Technical Expert(Ability)를 조합합니다.
+    [V11.5] 헬퍼 함수 기반 리팩토링 버전.
+    [V11.2] retry_count에 따라 주력/백업 엔진을 지능적으로 선택합니다.
     """
     email_body = mail_data.get('body', '')
     if not email_body or email_body == "본문 추출 불가 메일" or not GEMINI_API_KEY:
         return _fallback_response()
 
-    # 1. 지능 조립: 자아 + 요약 능력 + 기술 지식
-    base_persona = load_prompt("peani_persona.txt")
-    summarizer_ability = load_ability("summarizer")
-    tech_expert_ability = load_ability("technical_expert")
-    
-    dynamic_prompt = f"{base_persona}\n\n{summarizer_ability}\n\n{tech_expert_ability}"
+    # 1. 지능 및 자아 조립
+    dynamic_prompt = _read_prompt_file("peani_persona.txt")
+    dynamic_prompt += f"\n\n{load_ability('summarizer')}\n\n{load_ability('technical_expert')}"
     
     try:
         from feedback_manager import load_preferences, load_corrections
-        preferences = load_preferences()
-        if preferences:
-            pref_text = "\n".join([f"{i+1}. {p}" for i, p in enumerate(preferences)])
-            dynamic_prompt += f"\n\n[사용자 기피 학습 노트]\n아래 패턴과 유사한 메일은 '스킵'으로 분류:\n{pref_text}"
+        if not force_summarize:
+            preferences = load_preferences()
+            if preferences:
+                pref_text = "\n".join([f"{i+1}. {p}" for i, p in enumerate(preferences)])
+                dynamic_prompt += f"\n\n[사용자 기피 학습 노트]\n'스킵' 분류 기준:\n{pref_text}"
+        else:
+            dynamic_prompt += "\n\n[특별 지침] 반드시 요약하십시오."
 
         corrections = load_corrections()
         if corrections:
             corr_text = "\n".join([f"- {c}" for c in corrections])
-            dynamic_prompt += f"\n\n[사용자 교정 오답 노트]\n요약 시 반드시 엄수:\n{corr_text}"
-    except Exception:
-        pass
+            dynamic_prompt += f"\n\n[교정 오답 노트]\n최우선 산출 기준:\n{corr_text}"
+    except Exception: pass
 
-    # 시간 자각 지점 주입
-    import datetime
-    import pytz
-    from config import USER_TIMEZONE
-    try:
-        tz = pytz.timezone(USER_TIMEZONE)
-        now = datetime.datetime.now(tz)
-    except Exception:
-        now = datetime.datetime.now()
-        
-    current_time_info = f"\n\n[현재 시간 자각 지침]\n오늘은 {now.strftime('%Y-%m-%d (%A)')} 이며 시각은 {now.strftime('%H:%M:%S')} 입니다."
-    dynamic_prompt += current_time_info
+    # 시간 감각 주입
+    dynamic_prompt += _get_now_info()
 
-    # 제미나이 전송용 데이터 구성
-    final_text = f"[새 메일 원문]\n발신: {mail_data.get('sender')}\n제목: {mail_data.get('subject')}\n본문: {email_body}\n\n[요약 장부]\n{thread_history_text}"
+    # 데이터 구성
+    final_text = f"[새 메일]\n발신: {mail_data.get('sender')}\n제목: {mail_data.get('subject')}\n본문: {email_body}\n\n[장부]\n{thread_history_text}"
 
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
-        req_config = types.GenerateContentConfig(
-            system_instruction=dynamic_prompt,
-            response_mime_type="application/json"
-        )
+        req_config = types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         
-        model_chain = ["gemini-3-flash-preview", "gemini-2.5-flash"]
-        for model_name in model_chain:
-            try:
-                response = client.models.generate_content(model=model_name, contents=final_text, config=req_config)
-                return json.loads(response.text)
-            except Exception as e:
-                logger.error(f"AI 통신 오류 ({model_name}): {e}")
-                time.sleep(2)
-    except Exception:
-        pass
+        # 3+3 전략: 1~3회 주력, 4~6회 백업
+        model_name = PRIMARY_MODEL if retry_count <= 3 else BACKUP_MODEL
 
-    return _fallback_response()
+        response = client.models.generate_content(model=model_name, contents=final_text, config=req_config)
+        return json.loads(_clean_ai_json(response.text))
+    except Exception as e:
+        logger.error(f"AI 분석 중 오류 ({retry_count}회차): {e}")
+        return _fallback_response()
 
 def _fallback_response():
     return {
-        "status": "알림",
-        "is_ai_error": True,
-        "is_thread": False,
-        "thread_key": "AI 오류",
-        "thread_index": 1,
-        "summary": "AI 서버 응답 오류로 메일을 요약하지 못했습니다. 직접 확인해 주십시오."
+        "status": "알림", "is_ai_error": True, "is_thread": False, "thread_key": "AI 오류",
+        "thread_index": 1, "summary": "AI 서버 응답 오류로 메일을 요약하지 못했습니다. 직접 확인해 주십시오."
     }
 
 def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
-    """
-    V10.0: 자아 + 비서 능력 + 명령어 매뉴얼 조합
-    """
-    if not GEMINI_API_KEY:
-        return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
+    """[V11.5] 채팅 환경 즉시 백업 및 헬퍼 통합 버전"""
+    if not GEMINI_API_KEY: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
 
-    # 1. 지능 조립: 자아 + 비서/명령어 대응 능력
-    chat_prompt = load_prompt("peani_persona.txt")
-    secretary_ability = load_ability("secretary")
-    commands_manual = load_prompt("telegram_commands.txt")
+    # 지능 조립
+    chat_prompt = _read_prompt_file("peani_persona.txt")
+    chat_prompt += f"\n\n{load_ability('secretary')}\n\n{_read_prompt_file('telegram_commands.txt')}"
     
-    chat_prompt += f"\n\n{secretary_ability}\n\n{commands_manual}"
-    
-    # 최근 대화 맥락 주입
+    # 맥락/메모/시간 주입
     try:
         from chat_manager import get_recent_chat_context
-        chat_context = get_recent_chat_context(limit=20)
-        chat_prompt += "\n\n" + chat_context
-    except Exception:
-        pass
+        chat_prompt += "\n\n" + get_recent_chat_context(limit=20)
+    except Exception: pass
 
-    # 메모 현황 주입
     try:
         from memo_manager import get_active_memos_text
-        recent_memos_text = get_active_memos_text()
-        chat_prompt += f"\n\n[부장님 수첩 현황]\n{recent_memos_text}"
-    except Exception:
-        pass
+        chat_prompt += f"\n\n[부장님 수첩 현황]\n{get_active_memos_text()}"
+    except Exception: pass
 
-    # 시간 주입
-    import datetime
-    import pytz
-    from config import USER_TIMEZONE
-    try:
-        tz = pytz.timezone(USER_TIMEZONE)
-        now = datetime.datetime.now(tz)
-        chat_prompt += f"\n\n[현재 시각] {now.strftime('%Y-%m-%d %H:%M:%S')}"
-    except Exception:
-        pass
+    chat_prompt += _get_now_info()
 
     if replied_text:
-        mission_text = load_prompt("reply_mission.txt")
-        chat_prompt += "\n\n" + mission_text.format(replied_text=replied_text[:300])
+        chat_prompt += "\n\n" + _read_prompt_file("reply_mission.txt").format(replied_text=replied_text[:300])
 
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=user_message,
-            config=types.GenerateContentConfig(system_instruction=chat_prompt)
-        )
-        return response.text
+        # 3.0 실패 시 즉시 2.5 전환
+        for model_name in [PRIMARY_MODEL, BACKUP_MODEL]:
+            try:
+                response = client.models.generate_content(
+                    model=model_name, contents=user_message,
+                    config=types.GenerateContentConfig(system_instruction=chat_prompt)
+                )
+                return response.text
+            except Exception as e:
+                logger.error(f"채팅 중 AI 통신 오류 ({model_name}): {e}")
+                continue
+                
+        return "🚨 주력 및 백업 엔진이 모두 응답하지 않습니다."
     except Exception as e:
-        return f"🚨 처리 중 오류가 발생했습니다: {str(e)[:80]}"
+        return f"🚨 처리 중 치명적 오류: {str(e)[:80]}"
 
 def generate_daily_report_ai(raw_summaries: list) -> dict:
-    """
-    V10.0: 자아 + 요약 능력 + 전략 기획 능력 조합
-    """
-    if not GEMINI_API_KEY or not raw_summaries:
-        return {"report": "데이터 부족"}
+    """[V11.5] 일일 보고서 생성 리팩토링"""
+    if not GEMINI_API_KEY or not raw_summaries: return {"report": "데이터 부족"}
 
-    base_persona = load_prompt("peani_persona.txt")
-    summarizer_ability = load_ability("summarizer")
-    strategy_chief_ability = load_ability("strategy_chief")
-    
-    dynamic_prompt = f"{base_persona}\n\n{summarizer_ability}\n\n{strategy_chief_ability}"
+    dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('summarizer')}\n\n{load_ability('strategy_chief')}"
     data_text = "\n".join([f"제목: {i['subject']} | 요약: {i['summary']}" for i in raw_summaries])
 
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=data_text,
-            config=types.GenerateContentConfig(
-                system_instruction=dynamic_prompt,
-                response_mime_type="application/json"
-            )
+            model=PRIMARY_MODEL, contents=data_text,
+            config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         )
-        return json.loads(response.text)
+        return json.loads(_clean_ai_json(response.text))
     except Exception:
         return {"topics": [{"category": "오류", "items": ["보고서 생성 실패"]}]}
 
 def generate_weekly_summary_ai(daily_reports: dict) -> dict:
-    """
-    V10.0: 자아 + 전략 기획 능력(분석 특화) 조합
-    """
-    if not GEMINI_API_KEY or not daily_reports:
-        return {"summary": "데이터 부족"}
+    """[V11.5] 주간 보고서 생성 리팩토링"""
+    if not GEMINI_API_KEY or not daily_reports: return {"summary": "데이터 부족"}
 
-    base_persona = load_prompt("peani_persona.txt")
-    strategy_chief_ability = load_ability("strategy_chief")
-    
-    dynamic_prompt = f"{base_persona}\n\n{strategy_chief_ability}"
-    
+    dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('strategy_chief')}"
     week_text = ""
     for day, data in daily_reports.items():
         if isinstance(data, dict) and "topics" in data:
@@ -206,14 +196,9 @@ def generate_weekly_summary_ai(daily_reports: dict) -> dict:
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=week_text,
-            config=types.GenerateContentConfig(
-                system_instruction=dynamic_prompt,
-                response_mime_type="application/json"
-            )
+            model=PRIMARY_MODEL, contents=week_text,
+            config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         )
-        return json.loads(response.text)
+        return json.loads(_clean_ai_json(response.text))
     except Exception:
         return {"weekly_summary": "분석 실패", "key_achievements": []}
-

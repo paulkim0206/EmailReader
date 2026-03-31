@@ -16,6 +16,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# [V11.2] 부장님의 지침에 따른 AI 엔진 서열 정리 (3.0 주력 / 2.5 예비)
+PRIMARY_MODEL = "gemini-3-flash-preview"
+BACKUP_MODEL = "gemini-2.5-flash"
+
 # 프로젝트 최상위 경로
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -44,8 +48,8 @@ def get_current_timezone():
 
 USER_TIMEZONE = get_current_timezone()
 
-# 결과물 저장용 로컬 경로 (루트 폴더 내 Saved_Reports)
-SAVE_DIRECTORY_PATH = os.getenv("SAVE_DIRECTORY_PATH", os.path.join(BASE_DIR, "Saved_Reports"))
+# 결과물 저장용 로컬 경로 (루트 폴더 내 Email_Reports)
+SAVE_DIRECTORY_PATH = os.getenv("SAVE_DIRECTORY_PATH", os.path.join(BASE_DIR, "Email_Reports"))
 
 # 텔레그램 메일 핑퐁(스레드) 추적 장부 설정
 THREAD_CACHE_FILE = os.path.join(DATA_DIR, "thread_memory.json")
@@ -55,9 +59,6 @@ THREAD_TIMEOUT_DAYS = 30   # 30일 이상 소식 없는 방은 자동 삭제
 # [V4.2] 공용 수첩(JSON) 및 대화 히스토리 파일 경로
 USER_NOTES_FILE = os.path.join(DATA_DIR, "user_notes.json")
 CHAT_HISTORY_FILE = os.path.join(DATA_DIR, "chat_history.json")
-
-# [V1.0] 아이디어노트 파일 경로 (구 버전 호환용)
-IDEA_NOTE_FILE = os.path.join(BASE_DIR, "아이디어노트.md")
 
 # AI 서버 장애 시 재시도 대기열 파일 경로 및 대기 시간 설정
 RETRY_QUEUE_FILE = os.path.join(DATA_DIR, "retry_queue.json")

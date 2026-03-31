@@ -73,9 +73,9 @@ def generate_weekly_summary():
     """
     [V9.0] 이번 주(월~토) 일일 보고서들을 취합하여 주간 통합 리포트를 생성합니다.
     """
-    # 오늘은 일요일 오전 6시이므로, 오늘의 주차 파일을 가져옵니다.
-    today = datetime.date.today()
-    report_path = get_weekly_report_path(today)
+    # [V11.4] 월요일 아침에 실행되므로, '어제(일요일)' 기준의 주차 파일을 가져와야 지난주(월~토) 데이터가 잡힙니다.
+    reference_date = datetime.date.today() - datetime.timedelta(days=1)
+    report_path = get_weekly_report_path(reference_date)
     weekly_data = load_weekly_report(report_path)
     
     if not weekly_data:
