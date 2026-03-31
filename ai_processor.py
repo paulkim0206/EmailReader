@@ -8,6 +8,20 @@ import pytz
 from google import genai
 from google.genai import types
 from config import GEMINI_API_KEY, PROMPTS_DIR, logger, PRIMARY_MODEL, BACKUP_MODEL, USER_TIMEZONE
+# --- [V11.8] 지능형 성능 최적화: 전역 클라이언트 싱글톤 ---
+_AI_CLIENT = None
+
+def _get_ai_client():
+    """API 클라이언트를 매번 새로 만들지 않고 한 번만 만들어 재사용하는 엔진입니다."""
+    global _AI_CLIENT
+    if _AI_CLIENT is None and GEMINI_API_KEY:
+        try:
+            from google import genai
+            _AI_CLIENT = genai.Client(api_key=GEMINI_API_KEY)
+        except Exception as e:
+            logger.error(f"AI 클라이언트 생성 실패: {e}")
+            return None
+    return _AI_CLIENT
 
 # --- [V11.7] 지능형 지침서(프롬프트) 전용 스마트 메모리 장부 ---
 _PROMPT_CACHE = {} 
@@ -106,7 +120,9 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
     final_text = f"[새 메일]\n발신: {mail_data.get('sender')}\n제목: {mail_data.get('subject')}\n본문: {email_body}\n\n[장부]\n{thread_history_text}"
 
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _get_ai_client()
+        if not client: return _fallback_response()
+        
         req_config = types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         
         # 3+3 전략: 1~3회 주력, 4~6회 백업
@@ -135,7 +151,7 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
     # 맥락/메모/시간 주입
     try:
         from chat_manager import get_recent_chat_context
-        chat_prompt += "\n\n" + get_recent_chat_context(limit=20)
+        chat_prompt += "\n\n" + get_recent_chat_context(limit=30)
     except Exception: pass
 
     try:
@@ -149,22 +165,20 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
         chat_prompt += "\n\n" + _read_prompt_file("reply_mission.txt").format(replied_text=replied_text[:300])
 
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        # 3.0 실패 시 즉시 2.5 전환
-        for model_name in [PRIMARY_MODEL, BACKUP_MODEL]:
-            try:
-                response = client.models.generate_content(
-                    model=model_name, contents=user_message,
-                    config=types.GenerateContentConfig(system_instruction=chat_prompt)
-                )
-                return response.text
-            except Exception as e:
-                logger.error(f"채팅 중 AI 통신 오류 ({model_name}): {e}")
-                continue
-                
-        return "🚨 주력 및 백업 엔진이 모두 응답하지 않습니다."
+        client = _get_ai_client()
+        if not client: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
+        
+        # [V11.8] 속도 복구를 위해 백업 절차 없이 즉시 주력 엔진만 호출합니다.
+        response = client.models.generate_content(
+            model=PRIMARY_MODEL, 
+            contents=user_message,
+            config=types.GenerateContentConfig(system_instruction=chat_prompt)
+        )
+        return response.text
+        
     except Exception as e:
-        return f"🚨 처리 중 치명적 오류: {str(e)[:80]}"
+        logger.error(f"채팅 엔진 응답 실패: {e}")
+        return "🚨 앗, 부장님! 방금 머리가 좀 아파서 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?"
 
 def generate_daily_report_ai(raw_summaries: list) -> dict:
     """[V11.5] 일일 보고서 생성 리팩토링"""
@@ -174,7 +188,9 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
     data_text = "\n".join([f"제목: {i['subject']} | 요약: {i['summary']}" for i in raw_summaries])
 
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _get_ai_client()
+        if not client: return {"topics": [{"category": "오류", "items": ["API 연결 실패"]}]}
+
         response = client.models.generate_content(
             model=PRIMARY_MODEL, contents=data_text,
             config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
