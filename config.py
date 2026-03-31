@@ -16,6 +16,9 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
+# 프로젝트 최상위 경로
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # [V7.0] 사용자 맞춤형 타임존 설정 및 영구 저장 파일 경로
 TIMEZONE_FILE = os.path.join(BASE_DIR, "data", "timezone.json")
 
@@ -33,9 +36,6 @@ def get_current_timezone():
     return os.getenv("USER_TIMEZONE", "Asia/Ho_Chi_Minh")
 
 USER_TIMEZONE = get_current_timezone()
-
-# 프로젝트 최상위 경로
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 결과물 저장용 로컬 경로 (루트 폴더 내 Saved_Reports)
 SAVE_DIRECTORY_PATH = os.getenv("SAVE_DIRECTORY_PATH", os.path.join(BASE_DIR, "Saved_Reports"))
