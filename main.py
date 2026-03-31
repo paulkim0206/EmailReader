@@ -142,6 +142,21 @@ async def background_mail_checker(application: Application):
                     remove_from_retry_queue(retry_uid)
 
 
+async def background_mail_checker(application: Application):
+    """
+    [V1.12.2] 1분에 한 번씩 메일함을 확인하는 무한 반복 엔진입니다.
+    """
+    is_first_run = True
+    logger.info("⚙️ 메일 감시 엔진(Background Checker)이 시동되었습니다. (v11.0)")
+    
+    while True:
+        try:
+            # [V9.0] 매일/매주 오전 6시 보고서 체크
+            await handle_scheduled_reports(application)
+            
+            # 피아니가 살아있음을 알리는 심장박동 로그 (app.log 확인용)
+            logger.info("💓 메일함 확인 중... (Scanning for new emails)")
+
             # [V1.12.2] 메일 수신 중 봇이 멈추지 않게 백그라운드 스레드로 위임합니다!
             unseen_emails = await asyncio.to_thread(fetch_unseen_emails)
             
@@ -150,16 +165,14 @@ async def background_mail_checker(application: Application):
                 if unseen_emails:
                     for mail_data in unseen_emails:
                         save_processed_uid(mail_data['uid'])
-                    logger.info(f"서버 켜기 전부터 쌓여있던 과거 미확인 메일 {len(unseen_emails)}통은 알림 없이 조용히 무시(패스) 완료했습니다!")
+                    logger.info(f"서버 가동 전의 {len(unseen_emails)}통의 메일은 조용히 장부에 기록(무시)했습니다.")
                 is_first_run = False
-                logger.info("이제부터 새로 도착하는 따끈따끈한 새 이메일만 감시하여 실시간으로 보고합니다.")
-                await asyncio.sleep(60)
+                logger.info("모든 준비 완료! 이제부터 실시간으로 새 이메일을 보고합니다.")
+                await asyncio.sleep(10)
                 continue
 
             if unseen_emails:
-                logger.info(f"앗! 주인님에게 {len(unseen_emails)}통의 새로운 중요한 이메일이 찾아왔습니다.")
-                
-            for mail_data in unseen_emails:
+                logger.info(f"앗! 주인님에게 {len(unseen_emails)}통의 새로운 이메일이 왔습니다.")
                 # 1. [V1.11.0] 장부 전체를 인덱스 포함 텍스트로 포맷해서 제미나이에게 던집니다.
                 thread_history_text = format_threads_for_prompt()
 
