@@ -17,11 +17,10 @@ def load_prompt(filename):
         # 파일이 없을 경우 최소한의 안전장치(기본 자아)를 강제로 반환하여 시스템 다운 방지
         return "당신은 부장님을 보조하는 비서입니다. 친절하게 응답하십시오."
 
-def process_email_with_ai(mail_data, thread_history_text, force_summarize=False):
+def process_email_with_ai(mail_data, thread_history_text):
     """
-    V2.6: 비서의 투명성 강화.
-    - 스킵할 경우 이유를 명시합니다.
-    - force_summarize=True 일 경우 모든 스킵 규칙을 무시하고 강제로 요약합니다.
+    V6.0: 스킵 기능 제거 버전.
+    모든 수신 메일을 예외 없이 요약하여 보고합니다.
     """
     email_body = mail_data.get('body', '')
     if not email_body or email_body == "본문 추출 불가 메일" or not GEMINI_API_KEY:
@@ -38,32 +37,29 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False)
 [내 과거 이메일 요약 장부]
 {thread_history_text}"""
 
-    if force_summarize:
-        final_text += "\n\n⚠️ [중요 부장님 명령]: 위 메일이 스킵 기준에 해당하더라도, 이번만큼은 예외로 모든 규칙을 무시하고 반드시 '알림'으로 분류하여 상세히 요약하십시오."
-
     # [V3.3] 피아니의 자아(Persona)와 엄격한 이메일 요약 규정(Rules) 텍스트 파일 2개를 불러와 조립합니다.
     base_persona = load_prompt("peani_persona.txt")
     summary_rules = load_prompt("email_summary_rules.txt")
     dynamic_prompt = f"{base_persona}\n\n{summary_rules}"
-    if not force_summarize:
-        try:
-            from feedback_manager import load_preferences, load_corrections
+    
+    try:
+        from feedback_manager import load_preferences, load_corrections
+        
+        # 1. 스킵 기피 패턴(사용자 지정) 주입
+        preferences = load_preferences()
+        if preferences:
+            pref_text = "\n".join([f"{i+1}. {p}" for i, p in enumerate(preferences)])
+            dynamic_prompt += f"\n\n[사용자 기피 학습 노트]\n아래 패턴과 유사한 메일은 '스킵'으로 분류:\n{pref_text}"
+
+        # 2. [V3.2] 오답 노트 (요약 시 필수 교정 규칙) 주입
+        corrections = load_corrections()
+        if corrections:
+            corr_text = "\n".join([f"- {c}" for c in corrections])
+            dynamic_prompt += f"\n\n[사용자 교정 오답 노트 (가장 우선적으로 지킬 것)]\n이전 요약 오류를 수정한 규칙입니다. 요약 시 반드시 엄수하십시오:\n{corr_text}"
             
-            # 1. 스킵 기피 패턴 주입
-            preferences = load_preferences()
-            if preferences:
-                pref_text = "\n".join([f"{i+1}. {p}" for i, p in enumerate(preferences)])
-                dynamic_prompt += f"\n\n[사용자 기피 학습 노트]\n아래 패턴과 유사한 메일은 '스킵'으로 분류:\n{pref_text}"
-                
-            # 2. [V3.2] 오답 노트 (요약 시 필수 교정 규칙) 주입
-            corrections = load_corrections()
-            if corrections:
-                corr_text = "\n".join([f"- {c}" for c in corrections])
-                dynamic_prompt += f"\n\n[사용자 교정 오답 노트 (가장 우선적으로 지킬 것)]\n이전 요약 오류를 수정한 규칙입니다. 요약 시 반드시 엄수하십시오:\n{corr_text}"
-                
-        except Exception as e:
-            logger.error(f"학습 노트를 불러오는 중 오류 발생: {e}")
-            pass
+    except Exception as e:
+        logger.error(f"학습 노트를 불러오는 중 오류 발생: {e}")
+        pass
 
     # [V4.4] 이메일 분석 시에도 현재 날짜를 주입하여 날짜 판단 오류를 방지합니다.
     import datetime

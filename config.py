@@ -34,18 +34,15 @@ CHAT_HISTORY_FILE = os.path.join(BASE_DIR, "data", "chat_history.json")
 # [V1.0] 아이디어노트 파일 경로 (구 버전 호환용)
 IDEA_NOTE_FILE = os.path.join(BASE_DIR, "아이디어노트.md")
 
-# 거머리(스팸) 발송자 영구 차단용 블랙리스트 장부 경로 세팅
-BLACKLIST_FILE = os.path.join(BASE_DIR, "blacklist.json")
-
 # AI 서버 장애 시 재시도 대기열 파일 경로 및 대기 시간 설정
 RETRY_QUEUE_FILE = os.path.join(BASE_DIR, "retry_queue.json")
 RETRY_WAIT_MINUTES = 5  # AI 6회 실패 후 재시도까지 기다리는 시간 (분)
 
 # AI 제미나이 맞춤형 진화용 '기피 메일 학습 노트' 경로 세팅
-USER_PREFERENCES_FILE = os.path.join(BASE_DIR, "user_preferences.json")
+USER_PREFERENCES_FILE = os.path.join(BASE_DIR, "data", "user_preferences.json")
 
 # [V3.2] AI 요약 교정용 '오답 노트' 오프라인 기록용 경로 세팅
-USER_CORRECTIONS_FILE = os.path.join(BASE_DIR, "user_corrections.json")
+USER_CORRECTIONS_FILE = os.path.join(BASE_DIR, "data", "user_corrections.json")
 
 # [V3.3] 피아니 페르소나 및 외부 프롬프트 텍스트가 담긴 폴더 경로 세팅
 PROMPTS_DIR = os.path.join(BASE_DIR, "prompts")

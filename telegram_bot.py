@@ -28,37 +28,6 @@ def escape_for_tg(text):
         return ""
     return html.escape(str(text))
 
-async def send_skip_alert(application, mail_data: dict, ai_result: dict):
-    """
-    V2.6: AI가 '스킵'으로 분류한 메일에 대해 사유와 함께 알림을 보냅니다.
-    사용자가 직접 판단할 수 있도록 [그래도 요약해 줘!] 버튼을 제공합니다.
-    """
-    uid = mail_data.get('uid', '번호없음')
-    
-    # 나중에 강제 요약 시 꺼내 쓸 수 있도록 임시 저장소에 넣어둡니다.
-    temp_mail_cache[uid] = {
-        "mail": mail_data,
-        "ai": ai_result
-    }
-    
-    msg = (
-        f"⏭️ <b>[메일 요약 스킵 알림]</b>\n\n"
-        f"📝 <b>제목:</b> {escape_for_tg(mail_data.get('subject', ''))}\n"
-        f"👤 <b>보낸 사람:</b> {escape_for_tg(mail_data.get('sender', ''))}\n"
-        f"💡 <b>스킵 사유:</b> {escape_for_tg(ai_result.get('skip_reason', '내용 없음'))}\n\n"
-        f"<i>AI가 중요하지 않다고 판단했으나, 혹시 보고 싶으시면 아래 버튼을 누르세요.</i>"
-    )
-    
-    keyboard = [[InlineKeyboardButton("📝 그래도 요약해 줘! ✨", callback_data=f"force_summary_{uid}")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await application.bot.send_message(
-        chat_id=ALLOWED_CHAT_ID,
-        text=msg,
-        parse_mode="HTML",
-        reply_markup=reply_markup
-    )
-
 async def send_email_alert(application: Application, mail_data: dict, ai_result: dict, t_data: dict, base_subj: str):
     """
     새로운 이메일이 오고 AI가 분석을 마쳤을 때 텔레그램으로 배달합니다.
@@ -97,11 +66,10 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
             
             # 여러 개의 쪼개진 편지가 왔을 때, 마지막 장 맨 아랫부분 바닥에만 버튼을 달아줍니다.
             if i == len(message_chunks) - 1:
-                # 사용자가 버튼을 누르면 "save_<고유번호>" 또는 "block_<고유번호>" 란 암호 신호를 튕깁니다!
+                # 사용자가 버튼을 누르면 "save_<고유번호>" 란 암호 신호를 튕깁니다!
                 keyboard = [
                     [InlineKeyboardButton("💾 HTML 리포트 받기 📥", callback_data=f"save_{uid}")],
-                    [InlineKeyboardButton("🔇 이 발송자, 앞으로 요약 알림 받지 않기", callback_data=f"block_{uid}")],
-                    [InlineKeyboardButton("👎 이런 류의 메일 내용 요약 제외 (AI 학습)", callback_data=f"learn_{uid}")]
+                    [InlineKeyboardButton("👎 앞으로 요약 제외", callback_data=f"learn_{uid}")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -121,6 +89,45 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
         logger.info(f"텔레그램 알림 전송 완료! (메일번호 {uid})")
     except Exception as e:
         logger.error(f"텔레그램 전력망 장애로 소식 전달에 슬프게도 실패했습니다: {e}")
+
+async def send_skip_alert(application: Application, mail_data: dict, ai_result: dict):
+    """
+    [V6.0] 부장님이 가르친 패턴에 의해 메일이 스킵되었을 때 알림을 보냅니다.
+    스킵 사유를 명시하고, 혹시라도 요약을 원하실 경우를 위해 [그래도 요약해줘] 버튼을 같이 드립니다.
+    """
+    uid = mail_data.get('uid', '알수없는번호')
+    skip_reason = ai_result.get('skip_reason', '사용자 지정 패턴과 일치함')
+    
+    # 임시 보관소에 데이터 저장 (강제 요약 버튼 클릭 시 사용)
+    temp_mail_cache[uid] = {
+        "mail": mail_data,
+        "ai": ai_result
+    }
+
+    message_text = (
+        f"🔇 <b>메일 스킵 알림 (학습된 패턴)</b>\n\n"
+        f"🕒 <b>수신:</b> {escape_for_tg(mail_data.get('date', ''))}\n"
+        f"👤 <b>발신:</b> {escape_for_tg(mail_data.get('sender', ''))}\n"
+        f"📝 <b>제목:</b> {escape_for_tg(mail_data.get('subject', ''))}\n"
+        f"🚫 <b>사유:</b> {escape_for_tg(skip_reason)}\n\n"
+        f"위 메일은 부장님이 가르쳐주신 패턴과 유사하여 요약을 생략했습니다."
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("⚡ 그래도 요약해줘!", callback_data=f"force_summary_{uid}")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    try:
+        await application.bot.send_message(
+            chat_id=ALLOWED_CHAT_ID,
+            text=message_text,
+            parse_mode="HTML",
+            reply_markup=reply_markup
+        )
+        logger.info(f"스킵 알림 전송 완료 (UID: {uid})")
+    except Exception as e:
+        logger.error(f"스킵 알림 전송 실패: {e}")
 
 async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -177,33 +184,6 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text="⚠️ 해당 메일 내용이 컴퓨터의 단기 기억 용량에서 이미 지워졌습니다. (오래된 메일이거나 재부팅됨)"
-            )
-            
-    # [새로운 분기 기능] 사용자가 블랙리스트 버튼을 눌렀을 때!!
-    elif data.startswith("block_"):
-        uid = data.split("_")[1]
-        cache_data = temp_mail_cache.get(uid)
-
-        if cache_data:
-            from blacklist_manager import add_to_blacklist
-            sender = cache_data["mail"].get('sender', '')
-            success, result_msg = add_to_blacklist(sender)
-
-            if success:
-                await query.edit_message_reply_markup(reply_markup=None)
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=f"✅ 등록 완료.\n앞으로 [{result_msg}] 님의 메일은 텔레그램 요약 알림을 보내지 않고 조용히 패스하겠습니다.\n(원본 이메일은 이메일함에 정상적으로 보관되어 있습니다.)"
-                )
-            else:
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=f"⚠️ 이미 등록된 발송자이거나 주소를 확인할 수 없습니다: {result_msg}"
-                )
-        else:
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text="⚠️ 해당 메일 내용이 이미 옛날 것이라 차단할 주소록을 분실했습니다."
             )
             
     # [새로운 분기 3] 사용자가 AI 학습(👎) 단추를 눌렀을 때!!

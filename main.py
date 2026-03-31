@@ -87,27 +87,17 @@ async def background_mail_checker(application: Application):
             if unseen_emails:
                 logger.info(f"앗! 주인님에게 {len(unseen_emails)}통의 새로운 중요한 이메일이 찾아왔습니다.")
                 
-            from blacklist_manager import load_blacklist, extract_pure_email
-            current_blacklist = load_blacklist()
-
             for mail_data in unseen_emails:
-                # 🚫 [문지기 신설] 편지 봉투에 적힌 보낸 사람이 우리가 못 들어오게 막은 스팸 발송자인지 검열합니다.
-                pure_sender = extract_pure_email(mail_data.get('sender', ''))
-                if pure_sender in current_blacklist:
-                    logger.info(f"🚫 [사전 차단 작동] 아하! 이 녀석({pure_sender})은 블랙리스트에 걸렸군요. AI를 깨우지 않고 편지를 바로 휴지통에 꽂아버립니다.")
-                    save_processed_uid(mail_data['uid'])
-                    continue
-
-                # 2. [V1.11.0] 장부 전체를 인덱스 포함 텍스트로 포맷해서 제미나이에게 던집니다.
+                # 1. [V1.11.0] 장부 전체를 인덱스 포함 텍스트로 포맷해서 제미나이에게 던집니다.
                 thread_history_text = format_threads_for_prompt()
 
-                # 3. 제미나이가 원본+장부를 읽고 모든 판단을 합니다.
+                # 2. 제미나이가 원본+장부를 읽고 모든 판단을 합니다.
                 # [V1.12.2] AI 통신 중 봇이 멈추지 않게 백그라운드 스레드로 위임
                 ai_result = await asyncio.to_thread(process_email_with_ai, mail_data, thread_history_text)
 
-                # 4. AI 판단 결과에 따라 처리합니다.
+                # 3. AI 판단 결과에 따라 처리합니다.
                 if ai_result.get('status') == '스킵':
-                    logger.info(f"AI 판단: 요약 불필요 메일 (제목: {mail_data.get('subject')}) -> 스킵 알림 전송")
+                    logger.info(f"AI 판단: 학습된 패턴에 의해 스킵 (제목: {mail_data.get('subject')})")
                     await send_skip_alert(application, mail_data, ai_result)
 
                 elif ai_result.get('is_ai_error'):
