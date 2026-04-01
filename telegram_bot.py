@@ -1,4 +1,5 @@
 import asyncio
+import io
 import html
 import re
 import datetime
@@ -130,17 +131,18 @@ async def send_skip_alert(application: Application, mail_data: dict, ai_result: 
     except Exception as e:
         logger.error(f"스킵 알림 전송 실패: {e}")
 
-async def send_failure_alert(application: Application, mail_data: dict, retry_count: int):
+async def send_failure_alert(application: Application, mail_data: dict, raw_eml_bytes: bytes = None):
     """
-    [V11.2] 주력/백업 엔진 모두 고군분투했으나 결국 실패했을 때 부장님께 정중하게 보고합니다.
+    [V12.8] 실시간 및 배경 재시도까지 모두 실패했을 때 부장님께 정중하게 최종 보고하며,
+    부장님의 지침에 따라 온디맨드(On-demand)로 패치한 메일 원본(.eml)을 함께 배달합니다.
     """
+    subject = mail_data.get('subject', '제목없음')
     message_text = (
-        f"🚨 <b>업무 보고: AI 요약 최종 실패</b>\n\n"
-        f"부장님, 주력 및 백업 엔진(Gemini 2.5 Flash)을 총동원하여 총 {retry_count}회 시도했으나, "
-        f"서버 장애로 인해 아래 메일의 요약에 성공하지 못했습니다. 😭\n\n"
-        f"📝 <b>메일 제목:</b> {escape_for_tg(mail_data.get('subject', ''))}\n"
+        f"🚨 <b>최종 업무 보고: AI 요약 분석 불가</b>\n\n"
+        f"부장님, AI 서버의 일시적인 응답 지연으로 인해 해당 메일의 요약본을 생성하는 데 최종적으로 실패했습니다. 😭\n\n"
+        f"📝 <b>메일 제목:</b> {escape_for_tg(subject)}\n"
         f"👤 <b>보낸 사람:</b> {escape_for_tg(mail_data.get('sender', ''))}\n\n"
-        f"번거로우시겠지만 직접 확인을 부탁드립니다. 죄송합니다!"
+        f"부장님이 원호를 바로 확인하실 수 있도록 <b>아래에 메일 원본(.eml) 파일을 함께 동봉</b>합니다. 👇"
     )
     
     try:
@@ -149,9 +151,25 @@ async def send_failure_alert(application: Application, mail_data: dict, retry_co
             text=message_text,
             parse_mode="HTML"
         )
+        
+        # [V12.8] 잡아 온 원본 데이터가 있다면 즉시 파일로 쏴드립니다!
+        if raw_eml_bytes:
+            import io
+            # 특수 기호가 섞인 제목에서 파일명을 안전하게 정제합니다.
+            safe_subj = re.sub(r'[\\/:*?"<>|]', '_', subject)
+            eml_file = io.BytesIO(raw_eml_bytes)
+            eml_file.name = f"[원본] {safe_subj}.eml"
+            
+            await application.bot.send_document(
+                chat_id=ALLOWED_CHAT_ID,
+                document=eml_file,
+                caption=f"📋 원본 메일: {escape_for_tg(subject)}"
+            )
+            logger.info(f"메일 원본(.eml) 파일 배달 완료 (UID: {mail_data.get('uid')})")
+            
         logger.info(f"최종 실패 알림 전송 완료 (UID: {mail_data.get('uid')})")
     except Exception as e:
-        logger.error(f"최종 실패 알림 전송 실패: {e}")
+        logger.error(f"최종 실패 알림 및 파일 전송 실패: {e}")
 
 async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """

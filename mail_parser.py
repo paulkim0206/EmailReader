@@ -219,11 +219,25 @@ def fetch_unseen_emails():
     except Exception as e:
         logger.error(f"메일 수신 중 돌발 상황이 발생했습니다: {e}")
         return []
-    finally:
-        try:
-            # 방을 썼으면 문을 잠그고 나와야 합니다. 접속한 통로를 깨끗이 차단하고 닫습니다.
-            mail.close()
-            mail.logout()
-            logger.info("메일 서버와의 암호화 연결을 완전히 닫았습니다. 안심하세요.")
-        except:
-            pass
+def fetch_raw_eml(uid):
+    """
+    [V12.8] 부장님의 리소스 절약 지침: 최종 실패 시에만 서버에서 원본 데이터를 가져옵니다.
+    """
+    logger.info(f"긴급 원본 패치 시작 (UID: {uid})...")
+    try:
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=15)
+        mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        mail.select("inbox")
+        
+        # PEEK 옵션을 써서 서버의 메일 상태(읽음 표시)를 건드리지 않고 원본 데이터만 가져옵니다.
+        status, msg_data = mail.uid('FETCH', uid, "(BODY.PEEK[])")
+        mail.logout()
+        
+        if status == "OK" and msg_data and msg_data[0]:
+            raw_email = msg_data[0][1]
+            if isinstance(raw_email, bytes):
+                return raw_email
+        return None
+    except Exception as e:
+        logger.error(f"원본 메일 패치 중 오류 발생: {e}")
+        return None

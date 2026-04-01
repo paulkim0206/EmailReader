@@ -7,7 +7,7 @@ import pytz
 
 from google import genai
 from google.genai import types
-from config import GEMINI_API_KEY, PROMPTS_DIR, logger, PRIMARY_MODEL, BACKUP_MODEL, USER_TIMEZONE
+from config import GEMINI_API_KEY, PROMPTS_DIR, logger, AI_MODEL, USER_TIMEZONE
 # --- [V11.8] 지능형 성능 최적화: 전역 클라이언트 싱글톤 ---
 _AI_CLIENT = None
 
@@ -134,33 +134,45 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
     # 데이터 구성
     final_text = f"[새 메일]\n발신: {mail_data.get('sender')}\n제목: {mail_data.get('subject')}\n본문: {email_body}\n\n[장부]\n{thread_history_text}"
 
-    try:
-        client = _get_ai_client()
-        if not client: return _fallback_response()
-        
-        req_config = types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
-        
-        # 3+3 전략: 1~3회 주력, 4~6회 백업
-        model_name = PRIMARY_MODEL if retry_count <= 3 else BACKUP_MODEL
-
-        response = client.models.generate_content(model=model_name, contents=final_text, config=req_config)
-        result = json.loads(_clean_ai_json(response.text))
-        
-        # [V11.8] 빈 요약(Empty Summary) 방지 로직: AI가 답변을 아예 비웠을 경우 안내 문구 삽입
-        if result.get('status') == '알림' and not result.get('summary', '').strip():
-            result['summary'] = "💡 [알림] 메인 본문이 분석하기에 너무 복잡하거나, AI 응답 지연으로 요약을 구성하지 못했습니다. 원문을 직접 확인해 주십시오."
+    # [V12.7] 부장님의 지식: 정석형 지능형 재시도 (Exponential Backoff 적용)
+    max_retries = 3
+    current_attempt = 1
+    
+    while current_attempt <= max_retries:
+        try:
+            client = _get_ai_client()
+            if not client: return _fallback_response()
             
-        return result
-    except Exception as e:
-        logger.error(f"AI 분석 중 오류 ({retry_count}회차): {e}")
-        return _fallback_response()
+            req_config = types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
+            
+            # [V12.7] 단일 정예 엔진(AI_MODEL)으로 승부
+            response = client.models.generate_content(model=AI_MODEL, contents=final_text, config=req_config)
+            result = json.loads(_clean_ai_json(response.text))
+            
+            # 빈 요약 방지 로직 유지
+            if result.get('status') == '알림' and not result.get('summary', '').strip():
+                result['summary'] = "💡 [알림] 메인 본문이 너무 복합하거나 지연이 발생하여 요약을 구성하지 못했습니다. 원문을 직접 확인해 주십시오."
+                
+            return result
+
+        except Exception as e:
+            logger.warning(f"AI 분석 중 시도({current_attempt}/{max_retries}) 실패: {e}")
+            if current_attempt < max_retries:
+                # [V12.7] 정석 타이밍: 1회 실패 시 5초, 2회 실패 시 15초 대기
+                wait_time = 5 if current_attempt == 1 else 15
+                logger.info(f"지능형 재시도를 위해 {wait_time}초간 숨을 고릅니다...")
+                time.sleep(wait_time)
+            current_attempt += 1
+
+    # 모든 시도(3회) 실패 시 최종 항복(1단계)
+    return _fallback_response()
 
 def _fallback_response():
-    """[V11.8] 모든 분석 시도가 실패했을 때 부장님께 드리는 최종 안내"""
+    """[V12.7] 실시간 시도가 모두 실패했을 때 부장님께 드리는 전문적인 보고"""
     return {
-        "status": "알림", "is_ai_error": True, "is_thread": False, "thread_key": "분석 오류",
+        "status": "알림", "is_ai_error": True, "is_thread": False, "thread_key": "일시적 지연",
         "thread_index": 1, 
-        "summary": "🚨 [긴급 알림] AI 서버 응답 지연으로 실시간 메일 분석에 실패했습니다. 부장님, 번거로우시겠지만 이 메일은 직접 내용을 한 번 확인해 주셔야 할 것 같습니다!"
+        "summary": "⚠️ <b>[피아니 일시 지연]</b> AI 서버 응답 지연으로 실시간 분석을 중단했습니다. 5분 뒤 배경에서 마지막 1회 추가 요약 시도를 진행하겠습니다."
     }
 
 def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
@@ -193,7 +205,7 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
         
         # [V11.8] 속도 복구를 위해 백업 절차 없이 즉시 주력 엔진만 호출합니다.
         response = client.models.generate_content(
-            model=PRIMARY_MODEL, 
+            model=AI_MODEL, 
             contents=user_message,
             config=types.GenerateContentConfig(system_instruction=chat_prompt)
         )
@@ -216,7 +228,7 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
         if not client: return {"topics": [{"category": "오류", "items": ["API 연결 실패"]}]}
 
         response = client.models.generate_content(
-            model=PRIMARY_MODEL, contents=data_text,
+            model=AI_MODEL, contents=data_text,
             config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         )
         return json.loads(_clean_ai_json(response.text))
@@ -237,7 +249,7 @@ def generate_weekly_summary_ai(daily_reports: dict) -> dict:
     try:
         client = genai.Client(api_key=GEMINI_API_KEY)
         response = client.models.generate_content(
-            model=PRIMARY_MODEL, contents=week_text,
+            model=AI_MODEL, contents=week_text,
             config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         )
         return json.loads(_clean_ai_json(response.text))

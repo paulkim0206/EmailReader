@@ -149,11 +149,11 @@ async def background_mail_checker(application: Application):
                         retry_count = retry_item.get("retry_count", 1)
                         thread_history_text = format_threads_for_prompt()
                         
-                        # [V11.2] 현재 회차(retry_count)를 함께 넘겨 엔진을 선택하게 합니다.
-                        ai_result = await asyncio.to_thread(process_email_with_ai, retry_mail, thread_history_text, retry_count=retry_count)
+                        # [V12.7] 지능형 항복: 배경 재시도는 딱 '1회'만 더 기회를 줍니다.
+                        ai_result = await asyncio.to_thread(process_email_with_ai, retry_mail, thread_history_text)
 
                         if not ai_result.get('is_ai_error'):
-                            logger.info(f"✅ [{retry_count}회차] 재시도 성공! 요약 전송: {retry_mail.get('subject')}")
+                            logger.info(f"✅ [배경 재시도 성공] 요약 전송: {retry_mail.get('subject')}")
                             thread_key = ai_result.get('thread_key', retry_mail.get('subject', ''))
                             thread_index = ai_result.get('thread_index', 1)
                             is_thread = ai_result.get('is_thread', False)
@@ -163,15 +163,14 @@ async def background_mail_checker(application: Application):
                             save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'))
                             remove_from_retry_queue(retry_uid)
                         else:
-                            # [V11.2] 재시도 실패 시 후속 조치 (3+3 전략)
-                            if retry_count >= 6:
-                                logger.error(f"❌ 6회 모두 실패! 최종 포기: {retry_mail.get('subject')}")
-                                await send_failure_alert(application, retry_mail, retry_count)
-                                remove_from_retry_queue(retry_uid)
-                            else:
-                                # 3회차 실패 시 5분 휴식, 그 외엔 1분 뒤 재시도
-                                delay = 5 if retry_count == 3 else 1
-                                update_retry_status(retry_uid, delay)
+                            # [V12.8] 지능형 항복 & 원본 배달: 마지막 기회 실패 시 그제서야 서버에서 원본을 가져옵니다 (리소스 절약형)
+                            logger.error(f"❌ [최종 실패] 5분 뒤 재시도마저 실패! 원본 패치 시도: {retry_mail.get('subject')}")
+                            
+                            from mail_parser import fetch_raw_eml
+                            raw_eml = await asyncio.to_thread(fetch_raw_eml, retry_uid)
+                            
+                            await send_failure_alert(application, retry_mail, raw_eml)
+                            remove_from_retry_queue(retry_uid)
                     except Exception as re:
                         logger.error(f"재시도 처리 중 개별 오류 발생 (스킵하고 다음 진행): {re}")
                         continue
@@ -201,7 +200,9 @@ async def background_mail_checker(application: Application):
                         logger.info(f"🙈 AI 판단: 학습 패턴에 의해 스킵 ({mail_data.get('subject')})")
                         await send_skip_alert(application, mail_data, ai_result)
                     elif ai_result.get('is_ai_error'):
-                        logger.warning(f"⚠️ AI 실패 → 재시도 대기열 등록: {mail_data.get('subject')}")
+                        logger.warning(f"⚠️ AI 실패 → 지연 보고 및 대기열 등록: {mail_data.get('subject')}")
+                        # [V12.7 보강] 부장님이 답답하시지 않게 지연 보고를 즉시 드립니다.
+                        await send_email_alert(application, mail_data, ai_result, {}, mail_data.get('subject', ''))
                         add_to_retry_queue(mail_data)
                     else:
                         thread_key = ai_result.get('thread_key', mail_data.get('subject', ''))
