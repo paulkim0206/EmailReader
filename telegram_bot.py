@@ -137,12 +137,19 @@ async def send_failure_alert(application: Application, mail_data: dict, raw_eml_
     부장님의 지침에 따라 온디맨드(On-demand)로 패치한 메일 원본(.eml)을 함께 배달합니다.
     """
     subject = mail_data.get('subject', '제목없음')
+    
+    # [V12.10] 파일 존재 여부에 따라 정직하게 보고합니다.
+    if raw_eml_bytes:
+        status_msg = "부장님이 원본을 바로 확인하실 수 있도록 <b>아래에 메일 원본(.eml) 파일을 함께 동봉</b>합니다. 👇"
+    else:
+        status_msg = "🚨 <b>경고:</b> 서버 응답 지연으로 인해 <b>메일 원본(.eml) 파일 확보에도 실패</b>했습니다. 번거로우시겠지만 직접 확인을 부탁드립니다. 😭"
+
     message_text = (
         f"🚨 <b>최종 업무 보고: AI 요약 분석 불가</b>\n\n"
-        f"부장님, AI 서버의 일시적인 응답 지연으로 인해 해당 메일의 요약본을 생성하는 데 최종적으로 실패했습니다. 😭\n\n"
+        f"부장님, AI 서버의 일시적인 응답 지연으로 인해 해당 메일의 요약본을 생성하는 데 최종적으로 실패했습니다.\n\n"
         f"📝 <b>메일 제목:</b> {escape_for_tg(subject)}\n"
         f"👤 <b>보낸 사람:</b> {escape_for_tg(mail_data.get('sender', ''))}\n\n"
-        f"부장님이 원호를 바로 확인하실 수 있도록 <b>아래에 메일 원본(.eml) 파일을 함께 동봉</b>합니다. 👇"
+        f"{status_msg}"
     )
     
     try:

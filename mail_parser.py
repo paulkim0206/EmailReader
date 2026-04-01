@@ -236,7 +236,10 @@ def fetch_raw_eml(uid):
         if status == "OK" and msg_data and msg_data[0]:
             raw_email = msg_data[0][1]
             if isinstance(raw_email, bytes):
+                logger.info(f"성공: 원본 메일 패치 완료 ({len(raw_email)} bytes)")
                 return raw_email
+        
+        logger.error(f"실패: 서버에서 원본 데이터를 찾지 못했습니다. (UID: {uid}, Status: {status})")
         return None
     except Exception as e:
         logger.error(f"원본 메일 패치 중 오류 발생: {e}")
