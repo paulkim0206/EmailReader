@@ -93,25 +93,12 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
     if not email_body or email_body == "본문 추출 불가 메일" or not GEMINI_API_KEY:
         return _fallback_response()
 
-    # [V12.9] 지능형 세이프가드: 과잉 방어 해제 (부장님의 정상 메일 소통 보장)
-    # 1. 텍스트 내 유의미한 한국어/영어 단어가 있는지 먼저 확인 (화이트리스트)
-    # 한글(가-힣) 또는 영단어([a-zA-Z]{3,})가 5개 이상 발견되면 정상 메일로 간주하고 무조건 통과!
-    meaningful_words = re.findall(r'[가-힣]+|[a-zA-Z]{3,}', email_body)
-    if len(meaningful_words) >= 5:
-        pass # 정상 메일로 판단하여 아래 검사를 건너뜁니다.
-    else:
-        # 2. 깨진 글자(\ufffd) 비율 확인 (전체의 50% 이상일 때만 진짜 위험군으로 분류)
-        replacement_count = email_body.count('\ufffd')
-        if len(email_body) > 0 and (replacement_count / len(email_body)) > 0.5:
-            return {
-                "status": "알림", "is_ai_error": True, "summary": "⚠️ <b>[토큰 보호]</b> 본문 인코딩이 심하게 깨져(50% 이상) 판독이 어렵습니다. 원문을 직접 확인해 주세요."
-            }
-        
-        # 3. 외계어 패턴(공백 없는 긴 Base64 등) 감지 (기존 100자 -> 300자로 대폭 완화)
-        if re.search(r'[A-Za-z0-9+/]{300,}', email_body):
-            return {
-                "status": "알림", "is_ai_error": True, "summary": "⚠️ <b>[토큰 보호]</b> 해독되지 않은 대량의 데이터(Base64)가 감지되어 AI 분석을 차단했습니다. 직접 확인이 필요합니다."
-            }
+    # [V12.11] 최정예 세이프가드: 기계어 패턴(100자)만 철저히 차단 (부장님 정석 지참)
+    # 띄어쓰기 한 칸 없이 100자 이상의 영문/숫자/기호가 이어지면 '기계어'로 판단하여 차단합니다.
+    if re.search(r'[A-Za-z0-9+/]{100,}', email_body):
+        return {
+            "status": "알림", "is_ai_error": True, "summary": "⚠️ <b>[토큰 보호]</b> 해독되지 않은 대량의 데이터(Base64)가 감지되어 AI 분석을 차단했습니다. 직접 확인이 필요합니다."
+        }
 
     # 1. 지능 및 자아 조립
     dynamic_prompt = _read_prompt_file("peani_persona.txt")
