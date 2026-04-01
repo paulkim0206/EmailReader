@@ -68,11 +68,12 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
             
             # 여러 개의 쪼개진 편지가 왔을 때, 마지막 장 맨 아랫부분 바닥에만 버튼을 달아줍니다.
             if i == len(message_chunks) - 1:
-                # 사용자가 버튼을 누르면 "save_<고유번호>" 란 암호 신호를 튕깁니다!
-                keyboard = [
-                    [InlineKeyboardButton("💾 HTML 리포트 받기 📥", callback_data=f"save_{uid}")],
-                    [InlineKeyboardButton("👎 앞으로 요약 제외", callback_data=f"learn_{uid}")]
-                ]
+                # [V11.9] 부장님 요청에 따라 '리포트' 대신 '메일원본'으로 기능 및 명칭 변경
+                keyboard = [[
+                    InlineKeyboardButton("📌 일일보고서", callback_data=f"rpt_{uid}"),
+                    InlineKeyboardButton("💾 메일원본", callback_data=f"save_{uid}"),
+                    InlineKeyboardButton("👎 요약제외", callback_data=f"learn_{uid}")
+                ]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
             sent_msg = await application.bot.send_message(
@@ -171,6 +172,29 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     # 버튼 뒤에 숨겨두었던 암호문 (예: 'save_10번편지')을 가져옵니다.
     data = query.data
     
+    # [새로운 분기 5] 부장님의 "이건 보고서에 넣어!" 명령 (핀 버튼)
+    if data.startswith("rpt_"):
+        uid = data.split("_")[1]
+        cache_data = temp_mail_cache.get(uid)
+        
+        if cache_data:
+            from thread_manager import mark_as_report_target
+            thread_key = cache_data["ai"].get("thread_key", cache_data["mail"].get("subject", "알 수 없는 주제"))
+            thread_index = cache_data["ai"].get("thread_index", 1)
+            
+            if mark_as_report_target(thread_key, thread_index, status=True):
+                # 버튼을 중복으로 누르지 못하게 버튼을 지워주거나 안내를 보냅니다.
+                try:
+                    await query.answer(text="✅ 해당 업무가 내일 아침 일일보고서 대상으로 등록되었습니다! 📋", show_alert=True)
+                    # 이미 성공했으니 버튼 메뉴를 '해제' 버튼으로 바꾸거나 지웁니다. 여기서는 깔끔하게 지우겠습니다.
+                    await query.edit_message_reply_markup(reply_markup=None)
+                except Exception: pass
+            else:
+                await query.answer(text="❌ 장부 기록 중 문제가 생겼습니다. 나중에 다시 시도해 주세요.", show_alert=True)
+        else:
+            await query.answer(text="⚠️ 너무 오래된 메일이라 정보가 사라졌습니다. (재부팅됨)", show_alert=True)
+        return
+
     # 보안 통과 검사: 암호문에 맞게 분기 처리합니다.
     if data.startswith("save_"):
         uid = data.split("_")[1]
@@ -536,37 +560,41 @@ async def handle_update_command(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
     """
-    [V11.5] AI 답변 속에 숨겨진 명령 태그([[LEARN]], [[SAVE_MEMO]] 등)를 전문적으로 처리하는 청소기이자 실행기입니다.
-    기존에 handle_normal_chat에 길게 늘어져 있던 중복 로직을 이곳으로 통합했습니다.
+    [V11.10] AI 답변 속에 숨겨진 모든 명령 태그를 하나도 빠짐없이 처리하는 멀티태스킹 엔진입니다.
     """
-    # 1. 오답 노트 학습 태그 ([[LEARN]]...[[/LEARN]])
-    learn_match = re.search(r'\[\[LEARN\]\](.*?)\[\[/LEARN\]\]', ai_reply, re.DOTALL)
-    if learn_match:
-        rule_text = learn_match.group(1).strip()
+    # 1. 오답 노트 학습 태그 (다중 처리 지원)
+    learn_matches = list(re.finditer(r'\[\[LEARN\]\](.*?)\[\[/LEARN\]\]', ai_reply, re.DOTALL))
+    if learn_matches:
         from feedback_manager import add_correction
-        add_correction(rule_text)
+        for match in learn_matches:
+            rule_text = match.group(1).strip()
+            add_correction(rule_text)
         ai_reply = re.sub(r'\[\[LEARN\]\].*?\[\[/LEARN\]\]', '', ai_reply, flags=re.DOTALL).strip()
-        ai_reply += f"\n\n*(✅ 비서가 방금 지적하신 내용을 오답 노트 장부에 영구 기록하여 학습했습니다!)*"
+        ai_reply += f"\n\n*(✅ 비서가 방금 지적하신 {len(learn_matches)}건의 내용을 오답 노트에 기록하여 학습했습니다!)*"
 
-    # 2. 메모(수첩) 관련 태그
-    memo_match = re.search(r'\[\[SAVE_MEMO\]\](.*?)\[\[/SAVE_MEMO\]\]', ai_reply, re.DOTALL)
-    if memo_match:
+    # 2. 메모(수첩) 저장 태그 (다중 처리 지원)
+    memo_matches = list(re.finditer(r'\[\[SAVE_MEMO\]\](.*?)\[\[/SAVE_MEMO\]\]', ai_reply, re.DOTALL))
+    for match in memo_matches:
         from memo_manager import save_memo
-        save_memo(memo_match.group(1).strip())
+        save_memo(match.group(1).strip())
+    if memo_matches:
         ai_reply = re.sub(r'\[\[SAVE_MEMO\]\].*?\[\[/SAVE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
 
-    del_match = re.search(r'\[\[DELETE_MEMO\]\](.*?)\[\[/DELETE_MEMO\]\]', ai_reply, re.DOTALL)
-    if del_match:
+    # 3. 메모 삭제 태그 (다중 처리 지원 - 부장님 버그 리포트 해결)
+    del_matches = list(re.finditer(r'\[\[DELETE_MEMO\]\](.*?)\[\[/DELETE_MEMO\]\]', ai_reply, re.DOTALL))
+    for match in del_matches:
         try:
-            target_id = int(del_match.group(1).strip())
+            target_id = int(match.group(1).strip())
             from memo_manager import delete_memo
             delete_memo(target_id)
         except ValueError: pass
+    if del_matches:
         ai_reply = re.sub(r'\[\[DELETE_MEMO\]\].*?\[\[/DELETE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
 
-    upd_match = re.search(r'\[\[UPDATE_MEMO\]\](.*?)\[\[/UPDATE_MEMO\]\]', ai_reply, re.DOTALL)
-    if upd_match:
-        payload = upd_match.group(1).strip()
+    # 4. 메모 업데이트 태그 (다중 처리 지원)
+    upd_matches = list(re.finditer(r'\[\[UPDATE_MEMO\]\](.*?)\[\[/UPDATE_MEMO\]\]', ai_reply, re.DOTALL))
+    for match in upd_matches:
+        payload = match.group(1).strip()
         if "|" in payload:
             try:
                 parts = payload.split('|', 1)
@@ -575,54 +603,56 @@ async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.
                 from memo_manager import update_memo
                 update_memo(target_id, new_content)
             except ValueError: pass
+    if upd_matches:
         ai_reply = re.sub(r'\[\[UPDATE_MEMO\]\].*?\[\[/UPDATE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
 
-    # 3. 온디맨드 보고서 생성 태그
-    if "[[GENERATE_DAILY_REPORT]]" in ai_reply:
+    # 5. 온디맨드 보고서 생성 태그 (이 항목은 보통 1개씩 처리되지만 일관성을 유지)
+    daily_report_match = re.search(r"\[\[GENERATE_DAILY_REPORT\]\]\s*(.*?)\s*\[\[/GENERATE_DAILY_REPORT\]\]", ai_reply)
+    if daily_report_match:
         from report_manager import update_daily_report
-        date_match = re.search(r"\[\[GENERATE_DAILY_REPORT\]\]\s*(.*?)\s*\[\[/GENERATE_DAILY_REPORT\]\]", ai_reply)
-        if date_match:
-            target_date = date_match.group(1).strip()
-            logger.info(f"온디맨드 일일 보고서 생성 시작: {target_date}")
-            report_data = await asyncio.to_thread(update_daily_report, target_date)
+        target_date = daily_report_match.group(1).strip()
+        logger.info(f"온디맨드 일일 보고서 생성 시작: {target_date}")
+        report_data = await asyncio.to_thread(update_daily_report, target_date)
+        
+        if report_data:
+            summary_msg = f"✅ <b>{target_date} 일일 업무 보고서 생성을 완료했습니다!</b>\n\n"
             
-            if report_data:
-                summary_msg = f"✅ <b>{target_date} 일일 업무 보고서 생성을 완료했습니다!</b>\n\n"
-                
-                # [V11.8] 신규 고객사 중심 구조 반영 (가시성 극대화)
-                client_reports = report_data.get("client_reports", [])
-                if client_reports:
-                    for report in client_reports:
-                        summaries = [s for s in report.get("summaries", []) if s.strip()]
-                        if not summaries: continue
-                        
-                        summary_msg += f"🏢 <b>{escape_for_tg(report.get('client', '기타'))}</b>\n"
-                        for item in summaries:
-                            summary_msg += f"- {escape_for_tg(item)}\n"
-                        summary_msg += "\n" # 고객사 간 여백
-                else:
-                    # 구형 데이터 호환
-                    for topic in report_data.get("topics", []):
-                        items = [i for i in topic.get("items", []) if i.strip()]
-                        if not items: continue
-                        
-                        summary_msg += f"📌 <b>{topic.get('category', '분류')}</b>\n"
-                        for item in items:
-                            summary_msg += f"- {escape_for_tg(item)}\n"
-                        summary_msg += "\n"
-                
-                achievements = report_data.get("key_achievements", [])
-                if achievements:
-                    summary_msg += "🏆 <b>오늘의 핵심 성과:</b>\n"
-                    for ach in achievements:
-                        summary_msg += f"- {escape_for_tg(ach)}\n"
-                
-                summary_msg += f"\n정해진 경로(`Email_Reports/` 및 `data/reports/`)에 안전하게 보관했습니다. 📋✨"
-                await update.message.reply_text(summary_msg, parse_mode="HTML")
+            # [V11.8] 신규 고객사 중심 구조 반영 (가시성 극대화)
+            client_reports = report_data.get("client_reports", [])
+            if client_reports:
+                for report in client_reports:
+                    summaries = [s for s in report.get("summaries", []) if s.strip()]
+                    if not summaries: continue
+                    
+                    summary_msg += f"🏢 <b>{escape_for_tg(report.get('client', '기타'))}</b>\n"
+                    for item in summaries:
+                        summary_msg += f"- {escape_for_tg(item)}\n"
+                    summary_msg += "\n" # 고객사 간 여백
             else:
-                await update.message.reply_text(f"⚠️ {target_date}의 데이터가 없어 보고서를 생성하지 못했습니다.")
+                # 구형 데이터 호환
+                for topic in report_data.get("topics", []):
+                    items = [i for i in topic.get("items", []) if i.strip()]
+                    if not items: continue
+                    
+                    summary_msg += f"📌 <b>{topic.get('category', '분류')}</b>\n"
+                    for item in items:
+                        summary_msg += f"- {escape_for_tg(item)}\n"
+                    summary_msg += "\n"
+            
+            achievements = report_data.get("key_achievements", [])
+            if achievements:
+                summary_msg += "🏆 <b>오늘의 핵심 성과:</b>\n"
+                for ach in achievements:
+                    summary_msg += f"- {escape_for_tg(ach)}\n"
+            
+            summary_msg += f"\n정해진 경로(`Email_Reports/` 및 `data/reports/`)에 안전하게 보관했습니다. 📋✨"
+            await update.message.reply_text(summary_msg, parse_mode="HTML")
+        else:
+            await update.message.reply_text(f"⚠️ {target_date}의 데이터가 없어 보고서를 생성하지 못했습니다.")
+        
         ai_reply = re.sub(r"\[\[GENERATE_DAILY_REPORT\]\].*?\[\[/GENERATE_DAILY_REPORT\]\]", "", ai_reply, flags=re.DOTALL).strip()
 
+    # 6. 온디맨드 주간 보고서 생성 태그
     if "[[GENERATE_WEEKLY_REPORT]]" in ai_reply:
         from report_manager import generate_weekly_summary
         logger.info("온디맨드 주간 보고서 생성 시작")

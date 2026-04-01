@@ -93,7 +93,8 @@ def save_thread_entry(thread_key, thread_index, summary, msg_id=None):
     new_entry = {
         "index": thread_index,
         "date": now_str[:10],  # YYYY-MM-DD
-        "summary": summary
+        "summary": summary,
+        "for_report": False    # [V11.9] 기본은 미포함 상태이며, 부장님이 버튼을 누를 때 True로 바뀝니다.
     }
 
     if thread_key not in threads:
@@ -118,6 +119,27 @@ def save_thread_entry(thread_key, thread_index, summary, msg_id=None):
     save_threads(threads)
     logger.info(f"장부 저장 완료: '{thread_key}' #{thread_index}")
 
+def mark_as_report_target(thread_key, thread_index, status=True):
+    """
+    [V11.9] 특정 메일 요약을 일일/주간 보고서 대상으로 마킹하거나 해제합니다.
+    """
+    threads = load_threads()
+    if thread_key not in threads:
+        return False
+    
+    found = False
+    for entry in threads[thread_key].get("summary_history", []):
+        if entry.get("index") == thread_index:
+            entry["for_report"] = status
+            found = True
+            break
+            
+    if found:
+        save_threads(threads)
+        logger.info(f"보고서 마킹 완료: '{thread_key}' #{thread_index} -> {status}")
+        return True
+    return False
+
 def get_thread_msg_id(thread_key):
     """텔레그램 핑퐁 말풍선 연결을 위해 저장된 메시지 ID를 가져옵니다."""
     threads = load_threads()
@@ -137,20 +159,16 @@ def get_summaries_all_by_date(target_date: str) -> list:
         history = data.get("summary_history", [])
         for entry in history:
             if isinstance(entry, dict):
-                # 날짜가 일치하는 경우만 수집
+                # [V11.9] 특정 날짜와 일치 '하면서' 부장님이 보고서용으로 선정한(for_report=True) 것만 수집
                 if entry.get("date") == target_date:
-                    results.append({
-                        "subject": thread_key,
-                        "summary": entry.get("summary", "")
-                    })
+                    if entry.get("for_report", False): # 핀 버튼 누른 것만 필터링
+                        results.append({
+                            "subject": thread_key,
+                            "summary": entry.get("summary", "")
+                        })
             else:
-                # 구형 데이터(단순 문자열)인 경우 상위 last_date를 참고합니다.
-                last_date_str = data.get("last_date", "")
-                if last_date_str.startswith(target_date):
-                    results.append({
-                        "subject": thread_key,
-                        "summary": entry
-                    })
+                # 구형 데이터(단순 문자열)는 무시 (새로운 시스템 체제 전환 중)
+                continue
                     
     return results
 
