@@ -82,15 +82,15 @@ def format_threads_for_prompt():
 
     return "\n".join(lines)
 
-def save_thread_entry(thread_key, thread_index, summary, msg_id=None):
+def save_thread_entry(thread_key, thread_index, summary, msg_id=None, uid=None):
     """
-    제미나이가 판단한 결과(thread_key, thread_index, summary)를 장부에 저장합니다.
-    파이썬은 아무 판단 없이 제미나이가 시키는 대로만 적습니다.
+    [V12.12] 제미나이가 판단한 결과와 함께 메일 고유 번호(uid)를 장부에 저장합니다.
     """
     threads = load_threads()
     now_str = datetime.datetime.now().isoformat()
 
     new_entry = {
+        "uid": uid,            # ✅ 메일 고유 번호(UID) 기록 칸 신설!
         "index": thread_index,
         "date": now_str[:10],  # YYYY-MM-DD
         "summary": summary,
@@ -171,4 +171,25 @@ def get_summaries_all_by_date(target_date: str) -> list:
                 continue
                     
     return results
+
+def find_entry_by_uid(uid):
+    """
+    [V12.12] 번호(uid)를 던지면 장부 전체를 뒤져서 요약본 정보를 찾아오는 탐정 기능입니다.
+    업데이트 후 캐시가 비었을 때 버튼 기능을 복구하기 위해 사용합니다.
+    """
+    if not uid: return None
+    
+    threads = load_threads()
+    uid_str = str(uid)
+    
+    for thread_key, data in threads.items():
+        history = data.get("summary_history", [])
+        for entry in history:
+            if isinstance(entry, dict) and str(entry.get("uid")) == uid_str:
+                return {
+                    "thread_key": thread_key,
+                    "thread_index": entry.get("index"),
+                    "summary": entry.get("summary")
+                }
+    return None
 

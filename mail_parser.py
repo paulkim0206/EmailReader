@@ -244,3 +244,43 @@ def fetch_raw_eml(uid):
     except Exception as e:
         logger.error(f"원본 메일 패치 중 오류 발생: {e}")
         return None
+def fetch_parsed_mail(uid):
+    """
+    [V12.12] 특정 고유번호(uid)의 메일을 서버에서 즉각 가져와 파싱된 딕셔너리로 반환합니다.
+    캐시가 비었을 때 '강제 요약'을 수행하기 위한 실시간 복구 엔진입니다.
+    """
+    logger.info(f"실시간 메일 데이터 복구 시작 (UID: {uid})...")
+    try:
+        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=15)
+        mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        mail.select("inbox")
+        
+        # PEEK 옵션으로 메일 상태를 건드리지 않고 데이터를 가져옵니다.
+        status, msg_data = mail.uid('FETCH', uid, "(BODY.PEEK[])")
+        mail.logout()
+        
+        if status == "OK" and msg_data and msg_data[0] and isinstance(msg_data[0], tuple):
+            raw_email = msg_data[0][1]
+            if isinstance(raw_email, bytes):
+                import email
+                msg = email.message_from_bytes(raw_email)
+                
+                subject = decode_email_header(msg.get("Subject"))
+                sender = decode_email_header(msg.get("From"))
+                date = format_to_vietnam_time(msg.get("Date"))
+                body = get_text_from_email(msg)
+                
+                logger.info(f"성공: 메일 데이터 복구 완료 ({subject})")
+                return {
+                    "uid": uid,
+                    "subject": subject,
+                    "sender": sender,
+                    "date": date,
+                    "body": body
+                }
+        
+        logger.error(f"실패: 서버에서 해당 메일 데이터를 찾지 못했습니다. (UID: {uid})")
+        return None
+    except Exception as e:
+        logger.error(f"메일 데이터 복구 중 오류 발생: {e}")
+        return None

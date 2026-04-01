@@ -160,8 +160,9 @@ async def background_mail_checker(application: Application):
                             t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
                             
                             await send_email_alert(application, retry_mail, ai_result, t_data, thread_key)
-                            save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'))
+                            save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'), retry_mail.get('uid'))
                             remove_from_retry_queue(retry_uid)
+                            logger.info(f"장부 저장 성공 (UID: {retry_mail.get('uid')})")
                         else:
                             # [V12.8] 지능형 항복 & 원본 배달: 마지막 기회 실패 시 그제서야 서버에서 원본을 가져옵니다 (리소스 절약형)
                             logger.error(f"❌ [최종 실패] 5분 뒤 재시도마저 실패! 원본 패치 시도: {retry_mail.get('subject')}")
@@ -211,7 +212,8 @@ async def background_mail_checker(application: Application):
                         t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
                         
                         await send_email_alert(application, mail_data, ai_result, t_data, thread_key)
-                        save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'))
+                        save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'), mail_data.get('uid'))
+                        logger.info(f"장부 저장 성공 (UID: {mail_data.get('uid')})")
                     
                     # [V11.1] 모든 분석 과정이 '무사히' 끝나거나 대기열에 안전하게 들어갔을 때만 처리 완료 기록을 남깁니다.
                     save_processed_uid(mail_data['uid'])

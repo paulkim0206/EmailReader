@@ -37,9 +37,9 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
     """
     uid = mail_data.get('uid', '알수없는번호')
     
+    # [V12.12] 요약본은 장부에 있으므로 원본 본문만 캐시합니다.
     temp_mail_cache[uid] = {
-        "mail": mail_data,
-        "ai": ai_result
+        "mail": mail_data
     }
     
     # V1.11.0: 핑퐁 여부는 AI가 판단한 is_thread로 확인합니다.
@@ -100,10 +100,9 @@ async def send_skip_alert(application: Application, mail_data: dict, ai_result: 
     uid = mail_data.get('uid', '알수없는번호')
     skip_reason = ai_result.get('skip_reason', '사용자 지정 패턴과 일치함')
     
-    # 임시 보관소에 데이터 저장 (강제 요약 버튼 클릭 시 사용)
+    # [V12.12] 메모리 절약을 위해 제목 등은 캐시하지 않고, 강제 요약 시에만 활용할 메일 데이터만 보관합니다.
     temp_mail_cache[uid] = {
-        "mail": mail_data,
-        "ai": ai_result
+        "mail": mail_data
     }
 
     message_text = (
@@ -205,102 +204,101 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     # [새로운 분기 1] 부장님의 "이건 보고서에 넣어!" 명령 (핀 버튼)
     elif data.startswith("rpt_"):
         uid = data.split("_")[1]
-        cache_data = temp_mail_cache.get(uid)
+        from thread_manager import find_entry_by_uid, mark_as_report_target
         
-        if cache_data:
-            from thread_manager import mark_as_report_target
-            thread_key = cache_data["ai"].get("thread_key", cache_data["mail"].get("subject", "알 수 없는 주제"))
-            thread_index = cache_data["ai"].get("thread_index", 1)
+        # 1. 먼저 장부에서 정보를 찾습니다 (V12.12 핵심: 업데이트 후에도 작동!)
+        info = find_entry_by_uid(uid)
+        
+        if info:
+            thread_key = info["thread_key"]
+            thread_index = info["thread_index"]
             
             if mark_as_report_target(thread_key, thread_index, status=True):
-                # 버튼을 중복으로 누르지 못하게 버튼을 지워주거나 안내를 보냅니다.
                 try:
                     await query.answer(text="✅ 해당 업무가 내일 아침 일일보고서 대상으로 등록되었습니다! 📋", show_alert=True)
-                    # 이미 성공했으니 버튼 메뉴를 '해제' 버튼으로 바꾸거나 지웁니다. 여기서는 깔끔하게 지우겠습니다.
                     await query.edit_message_reply_markup(reply_markup=None)
                 except Exception: pass
             else:
                 await query.answer(text="❌ 장부 기록 중 문제가 생겼습니다. 나중에 다시 시도해 주세요.", show_alert=True)
         else:
-            await query.answer(text="⚠️ 너무 오래된 메일이라 정보가 사라졌습니다. (재부팅됨)", show_alert=True)
+            await query.answer(text="⚠️ 너무 오래된 메일이거나 장부에서 찾을 수 없습니다. (30일 경과 등)", show_alert=True)
         return
 
     # [새로운 분기 3] 사용자가 AI 학습(👎) 단추를 눌렀을 때!!
     elif data.startswith("learn_"):
         uid = data.split("_")[1]
-        cache_data = temp_mail_cache.get(uid)
+        from thread_manager import find_entry_by_uid
+        from feedback_manager import add_learning_preference
         
-        if cache_data:
-            from feedback_manager import add_learning_preference
-            subject = cache_data["mail"].get("subject", "제목 없음")
-            summary = cache_data["ai"].get("summary", "데이터 없음")
-            
-            success, msg = add_learning_preference(subject, summary)
-            
+        # 1. 장부 또는 캐시에서 제목과 내용을 확보합니다.
+        info = find_entry_by_uid(uid)
+        subject = None
+        summary = None
+        
+        if info:
+            subject = info["thread_key"]
+            summary = info["summary"]
+        else:
+            # 장부에도 없으면(스킵된 메일 등) 캐시를 확인합니다.
+            cache_data = temp_mail_cache.get(uid)
+            if cache_data:
+                subject = cache_data["mail"].get("subject")
+                summary = "데이터 없음(스킵됨)"
+
+        if subject:
+            success, msg = add_learning_preference(subject, summary or "데이터 없음")
             if success:
-                # 사용자가 또 광클릭 못하게 기존의 모든 메뉴판(버튼들)을 싹 날려줍니다.
                 await query.edit_message_reply_markup(reply_markup=None)
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text=(
-                        f"🧠 요약 제외 학습 완료!\n\n"
-                        f"📝 등록된 제목 패턴: [{escape_for_tg(subject)}]\n\n"
-                        f"앞으로 이와 비슷한 내용의 메일이 오면 사용자님을 귀찮게 하지 않고 "
-                        f"스스로 조용히 [스킵]하겠습니다. ✨"
-                    )
+                    text=f"🧠 요약 제외 학습 완료!\n\n📝 등록된 제목 패턴: [{escape_for_tg(subject)}]\n\n앞으로 이와 비슷한 메일은 스킵하겠습니다. ✨"
                 )
             else:
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=f"ℹ️ 이미 학습된 패턴입니다! 중복 등록은 생략했습니다.\n(제목: [{escape_for_tg(subject)}])"
-                )
+                await context.bot.send_message(chat_id=query.message.chat_id, text=f"ℹ️ 이미 학습된 패턴입니다.")
         else:
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text="⚠️ 해당 메일 내용이 이미 옛날 것이라 파이썬이 내용을 까먹었습니다."
-            )
+            await context.bot.send_message(chat_id=query.message.chat_id, text="⚠️ 정보를 찾을 수 없습니다.")
+        return
 
     # [새로운 분기 4] 부장님의 준엄한 명령: "그래도 요약해!"
     elif data.startswith("force_summary_"):
         uid = data.split("_")[2]
-        cache_data = temp_mail_cache.get(uid)
         
-        if cache_data:
-            # [V11.1] 텔레그램 특수문자(<, >) 파싱 에러 방지를 위해 기존 메시지 텍스트를 안전하게 보호(Escape)합니다.
+        # 1. 텍스트부터 먼저 표시 (부장님 안심용)
+        try:
             safe_current_text = escape_for_tg(query.message.text)
-            
-            try:
-                await query.edit_message_text(
-                    text=f"{safe_current_text}\n\n⏳ <b>부장님 명령 접수! 강제로 다시 분석 중입니다...</b>",
-                    parse_mode="HTML"
-                )
-            except Exception:
-                # 이미 텍스트가 수정되었거나 네트워크 문제일 경우 조용히 넘어갑니다.
-                pass
-            
-            # 2. 강제 요약 수행 (순환 참조 방지를 위해 로컬 임포트)
+            await query.edit_message_text(
+                text=f"{safe_current_text}\n\n⏳ <b>부장님 명령 접수! 서버에서 데이터를 다시 가져와 분석 중입니다...</b>",
+                parse_mode="HTML"
+            )
+        except Exception: pass
+
+        # 2. 메일 데이터 확보 (캐시 우선 -> 없으면 서버 실시간 패치)
+        mail_data = None
+        cache_data = temp_mail_cache.get(uid)
+        if cache_data:
+            mail_data = cache_data.get("mail")
+        else:
+            # [V12.12] 업데이트 후 캐시가 비었을 때 서버에서 직접 가져옵니다!
+            from mail_parser import fetch_parsed_mail
+            mail_data = await asyncio.to_thread(fetch_parsed_mail, uid)
+
+        if mail_data:
             from ai_processor import process_email_with_ai
             from thread_manager import format_threads_for_prompt
-            
-            mail_data = cache_data["mail"]
             history = format_threads_for_prompt()
             
-            # force_summarize=True 옵션을 주어 모든 엔진을 풀가동합니다.
             new_ai_result = await asyncio.to_thread(process_email_with_ai, mail_data, history, force_summarize=True)
             
-            # 3. 분석 완료 시 알림 전송 (t_data는 새로 생성)
+            # 분석 완료 시 알림 및 장부 기록
+            from thread_manager import save_thread_entry
             await send_email_alert(context.application, mail_data, new_ai_result, {}, mail_data.get('subject'))
+            save_thread_entry(new_ai_result.get('thread_key'), new_ai_result.get('thread_index'), new_ai_result.get('summary'), None, uid)
             
-            # 4. 기존 스킵 버튼은 지워줍니다 (실패해도 무관하므로 예외 처리).
-            try:
-                await query.edit_message_reply_markup(reply_markup=None)
-            except Exception:
-                pass
+            try: await query.edit_message_reply_markup(reply_markup=None)
+            except Exception: pass
         else:
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text="⚠️ 임시 보관소에서 메일 데이터를 찾을 수 없습니다. (재부팅됨)"
-            )
+            await context.bot.send_message(chat_id=query.message.chat_id, text="🚨 메일 서버에서 데이터를 가져오는 데 실패했습니다.")
+        return
 
     # [V7.0 새로운 분기] 사용자가 시간대(tz_) 수동 버튼을 눌렀을 때!!
     elif data.startswith("tz_"):
