@@ -26,51 +26,28 @@ def create_and_save_report(mail_data, ai_result):
     file_path = os.path.join(SAVE_DIRECTORY_PATH, file_name)
 
     try:
-        # 프리미엄 HTML 템플릿을 작성합니다.
-        html_content = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>이메일 분석 보고서: {raw_subject}</title>
-    <style>
-        body {{ font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 40px auto; padding: 20px; background-color: #f8f9fa; }}
-        .header {{ background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 30px; border-radius: 12px 12px 0 0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
-        .section {{ background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; }}
-        h1 {{ margin: 0; font-size: 24px; }}
-        h2 {{ color: #2a5298; border-left: 5px solid #2a5298; padding-left: 15px; margin-top: 30px; font-size: 20px; }}
-        .meta-info {{ background: #f1f3f5; padding: 15px; border-radius: 8px; margin-top: 15px; font-size: 14px; }}
-        .summary {{ background: #e7f3ff; padding: 20px; border-radius: 8px; border-left: 5px solid #007bff; font-size: 16px; white-space: pre-wrap; }}
-        .body-raw {{ background: #fdfdfd; padding: 20px; border: 1px solid #dee2e6; border-radius: 8px; white-space: pre-wrap; font-family: 'Consolas', monospace; color: #495057; font-size: 13px; }}
-        .footer {{ font-size: 12px; color: #868e96; text-align: center; margin-top: 30px; }}
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>📧 이메일 분석 보고서</h1>
-        <div class="meta-info">
-            <strong>📌 제목:</strong> {raw_subject}<br>
-            <strong>👤 발신자:</strong> {mail_data.get('sender', '알 수 없음')}<br>
-            <strong>🕒 날짜:</strong> {mail_data.get('date', '알 수 없음')}
-        </div>
-    </div>
-    
-    <div class="section">
-        <h2>📋 인공지능 요약 내용</h2>
-        <div class="summary">{ai_result.get('summary', '요약 내용이 없습니다.').replace('\n', '<br>')}</div>
+        # 1. 분리된 HTML 템플릿 파일을 읽어옵니다. (디자인 유지보수 용이성 확보)
+        template_path = os.path.join(os.path.dirname(__file__), "prompts", "templates", "email_raw.html")
         
-        <h2>📜 이메일 원본 텍스트</h2>
-        <div class="body-raw">{mail_data.get('body', '본문 내용 없음')}</div>
-    </div>
-    
-    <div class="footer">본 보고서는 지능형 이메일 비서(V2.5)에 의해 생성되었습니다.</div>
-</body>
-</html>
-"""
-        # UTF-8 인코딩을 적용해 한글이 절대 깨지지 않게 씁니다.
+        # 만약 템플릿 파일이 없으면 최소한의 기본 포맷이라도 출력하도록 방어합니다.
+        if os.path.exists(template_path):
+            with open(template_path, "r", encoding="utf-8") as f:
+                html_template = f.read()
+        else:
+            logger.warning("HTML 템플릿 파일을 찾을 수 없어 기본 모드로 전환합니다.")
+            html_template = "<html><body><h1>{{SUBJECT}}</h1><hr><pre>{{BODY}}</pre></body></html>"
+
+        # 2. 부장님이 주신 데이터로 템플릿의 빈칸(Placeholder)을 채웁니다.
+        html_content = html_template.replace("{{SUBJECT}}", raw_subject)
+        html_content = html_content.replace("{{SENDER}}", mail_data.get('sender', '알 수 없음'))
+        html_content = html_content.replace("{{DATE}}", mail_data.get('date', '알 수 없음'))
+        html_content = html_content.replace("{{BODY}}", mail_data.get('body', '본문 내용 없음'))
+
+        # 3. UTF-8 인코딩을 적용해 한글이 깨지지 않게 저장합니다.
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(html_content)
             
-        logger.info(f"프리미엄 HTML 보고서가 완벽하게 저장되었습니다: {file_path}")
+        logger.info(f"아웃룩 클래식 스타일 원본 문서 저장 완료: {file_path}")
         return True, file_path
 
     except Exception as e:
