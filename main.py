@@ -61,18 +61,25 @@ async def send_daily_business_report(application: Application, target_date=None)
             disp_date = target_date if target_date else (datetime.datetime.now(pytz.timezone(USER_TIMEZONE))).strftime('%Y-%m-%d')
             msg = f"☀️ <b>[피아니] 일일 비즈니스 리포트 ({disp_date})</b>\n\n"
             
-            # [핵심] 고객사별로 묶어서 슬림하게 출력 (줄 간격 1줄 규칙 적용)
+            # [핵심] 고객사별로 묶어서 슬림하게 출력 (가시성 최적화)
             client_reports = daily_json.get("client_reports", [])
             if client_reports:
                 for report in client_reports:
+                    summaries = [s for s in report.get("summaries", []) if s.strip()]
+                    if not summaries: continue # 유효 내용 없으면 스킵
+                    
                     msg += f"🏢 <b>{escape_for_tg(report.get('client', '기타'))}</b>\n"
-                    for item in report.get("summaries", []):
-                        msg += f"- {escape_for_tg(item)}\n\n" # 요약 간 줄 간격 추가
+                    for item in summaries:
+                        msg += f"- {escape_for_tg(item)}\n" # 문장 사이 공백 제거
+                    msg += "\n" # 고객사 그룹 간 1줄 공백
             else:
                 # 구형 데이터 호환 처리 (topics)
                 for topic in daily_json.get("topics", []):
+                    items = [i for i in topic.get("items", []) if i.strip()]
+                    if not items: continue
+                    
                     msg += f"📌 <b>{topic.get('category', '분류')}</b>\n"
-                    for item in topic.get("items", []):
+                    for item in items:
                         msg += f"- {escape_for_tg(item)}\n"
                     msg += "\n"
 

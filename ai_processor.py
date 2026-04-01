@@ -129,15 +129,23 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
         model_name = PRIMARY_MODEL if retry_count <= 3 else BACKUP_MODEL
 
         response = client.models.generate_content(model=model_name, contents=final_text, config=req_config)
-        return json.loads(_clean_ai_json(response.text))
+        result = json.loads(_clean_ai_json(response.text))
+        
+        # [V11.8] 빈 요약(Empty Summary) 방지 로직: AI가 답변을 아예 비웠을 경우 안내 문구 삽입
+        if result.get('status') == '알림' and not result.get('summary', '').strip():
+            result['summary'] = "💡 [알림] 메인 본문이 분석하기에 너무 복잡하거나, AI 응답 지연으로 요약을 구성하지 못했습니다. 원문을 직접 확인해 주십시오."
+            
+        return result
     except Exception as e:
         logger.error(f"AI 분석 중 오류 ({retry_count}회차): {e}")
         return _fallback_response()
 
 def _fallback_response():
+    """[V11.8] 모든 분석 시도가 실패했을 때 부장님께 드리는 최종 안내"""
     return {
-        "status": "알림", "is_ai_error": True, "is_thread": False, "thread_key": "AI 오류",
-        "thread_index": 1, "summary": "AI 서버 응답 오류로 메일을 요약하지 못했습니다. 직접 확인해 주십시오."
+        "status": "알림", "is_ai_error": True, "is_thread": False, "thread_key": "분석 오류",
+        "thread_index": 1, 
+        "summary": "🚨 [긴급 알림] AI 서버 응답 지연으로 실시간 메일 분석에 실패했습니다. 부장님, 번거로우시겠지만 이 메일은 직접 내용을 한 번 확인해 주셔야 할 것 같습니다!"
     }
 
 def chat_with_secretary(user_message: str, replied_text: str = None) -> str:

@@ -589,18 +589,25 @@ async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.
             if report_data:
                 summary_msg = f"✅ <b>{target_date} 일일 업무 보고서 생성을 완료했습니다!</b>\n\n"
                 
-                # [V11.8] 신규 고객사 중심 구조 반영
+                # [V11.8] 신규 고객사 중심 구조 반영 (가시성 극대화)
                 client_reports = report_data.get("client_reports", [])
                 if client_reports:
                     for report in client_reports:
+                        summaries = [s for s in report.get("summaries", []) if s.strip()]
+                        if not summaries: continue
+                        
                         summary_msg += f"🏢 <b>{escape_for_tg(report.get('client', '기타'))}</b>\n"
-                        for item in report.get("summaries", []):
-                            summary_msg += f"- {escape_for_tg(item)}\n\n"
+                        for item in summaries:
+                            summary_msg += f"- {escape_for_tg(item)}\n"
+                        summary_msg += "\n" # 고객사 간 여백
                 else:
                     # 구형 데이터 호환
                     for topic in report_data.get("topics", []):
+                        items = [i for i in topic.get("items", []) if i.strip()]
+                        if not items: continue
+                        
                         summary_msg += f"📌 <b>{topic.get('category', '분류')}</b>\n"
-                        for item in topic.get("items", []):
+                        for item in items:
                             summary_msg += f"- {escape_for_tg(item)}\n"
                         summary_msg += "\n"
                 
