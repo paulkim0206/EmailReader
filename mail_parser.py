@@ -12,25 +12,40 @@ from config import IMAP_SERVER, IMAP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD, logger
 # 이미 처리된 메일 번호들을 안전하게 저장해둘 메모장(파일)의 경로입니다.
 UID_FILE = PROCESSED_UIDS_FILE
 
+# [V12.13] 중복 체크 초고속화: 수만 개의 메일 번호도 0.0001초 만에 찾아내는 인메모리 세트 주머니입니다.
+_PROCESSED_UIDS_CACHE = None
+
 def load_processed_uids():
-    """이미 처리된 이메일의 고유 번호 목록을 불러오는 함수입니다."""
+    global _PROCESSED_UIDS_CACHE
+    
+    # 1. 이미 내 머릿속(메모리)에 번호들이 다 있다면 바로 반환합니다.
+    if _PROCESSED_UIDS_CACHE is not None:
+        return _PROCESSED_UIDS_CACHE
+
+    # 2. 처음 실행되었다면 파일(금고)에서 번호 목록을 꺼내옵니다.
     if os.path.exists(UID_FILE):
         try:
             with open(UID_FILE, "r", encoding="utf-8") as f:
-                # 파일에 저장된 리스트를 가져와서 중복을 알아서 지워주도록 묶음(set)으로 만듭니다.
-                return set(json.load(f))
+                _PROCESSED_UIDS_CACHE = set(json.load(f))
+                return _PROCESSED_UIDS_CACHE
         except Exception as e:
             logger.error(f"메일 고유 번호 파일 읽기 오류: {e}")
-            return set()
-    return set()
+    
+    # 3. 금고가 비었다면 빈 주머니를 만듭니다.
+    _PROCESSED_UIDS_CACHE = set()
+    return _PROCESSED_UIDS_CACHE
 
 def save_processed_uid(uid):
-    """새롭게 성공적으로 처리한 이메일 고유 번호를 안전하게 저장하는 엑셀 다이어리 같은 역할입니다."""
+    global _PROCESSED_UIDS_CACHE
+    
+    # 0. 메모리 주머니와 파일 금고 실시간 동기화
     uids = load_processed_uids()
-    uids.add(uid)
+    uids.add(str(uid)) # UID는 일관성 있게 문자열로 보관
+    
     try:
         with open(UID_FILE, "w", encoding="utf-8") as f:
             json.dump(list(uids), f, ensure_ascii=False, indent=4)
+        logger.info(f"메일 고유 번호 장부 및 캐시 동기화 완료 (UID: {uid})")
     except Exception as e:
         logger.error(f"메일 고유 번호 저장 오류: {e}")
 

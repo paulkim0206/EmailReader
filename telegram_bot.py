@@ -19,7 +19,18 @@ ALLOWED_CHAT_ID = str(TELEGRAM_CHAT_ID)
 # 이메일 데이터와 AI가 고생해서 분석한 요약을 컴퓨터 기억장치에 임시로 '잠시' 넣어두는 상자입니다.
 # 나중에 유저가 텔레그램 버튼으로 "이거 저장해줘!" 라고 할 때 여기서 꺼내다 씁니다.
 # (컴퓨터를 끄면 상자가 비워지는 임시 보관소라 용량 걱정은 전혀 없습니다.)
+# (컴퓨터를 끄면 상자가 비워지는 임시 보관소라 용량 걱정은 전혀 없습니다.)
 temp_mail_cache = {}
+
+def clear_temp_cache():
+    """
+    [V12.13] 임시 저장소(메일 원본 캐시)를 싹 비우는 대청소 함수입니다.
+    메모리 점유율을 낮추기 위해 정해진 시간(월/목 03시)에 호출됩니다.
+    """
+    global temp_mail_cache
+    cache_count = len(temp_mail_cache)
+    temp_mail_cache.clear()
+    logger.info(f"🧹 임시 저장소 대청소 완료! ({cache_count}건의 데이터를 정리했습니다.)")
 
 def escape_for_tg(text):
     """

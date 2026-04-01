@@ -23,42 +23,63 @@ def _get_ai_client():
             return None
     return _AI_CLIENT
 
-# --- [V11.7] 지능형 지침서(프롬프트) 전용 스마트 메모리 장부 ---
+# [V12.13] 프롬프트 뇌(뇌세포) 일괄 이식: 기동 시 모든 지침서를 100% 메모리에 상주시킵니다.
 _PROMPT_CACHE = {} 
 
-def _read_prompt_file(filename, subfolder=None):
-    """파일의 수정 시간을 체크하여 똑똑하게(캐싱) 읽어오는 공용 헬퍼 함수"""
-    if subfolder:
-        filepath = os.path.join(PROMPTS_DIR, subfolder, filename)
-    else:
-        filepath = os.path.join(PROMPTS_DIR, filename)
+def load_all_prompts_to_memory():
+    """
+    [V12.13] 비서가 눈을 뜰 때(기동 시), 'prompts' 폴더 안의 모든 매뉴얼을 
+    암기(메모리 캐싱)하도록 하여 분석 속도를 최고 속도로 끌어올립니다.
+    """
+    global _PROMPT_CACHE
+    logger.info("🧠 프롬프트 지침서(매뉴얼) 일괄 암기를 시작합니다...")
+    
+    # 1. 대상 폴더 정의 (핵심 폴더 및 전문 직무 폴더)
+    target_dirs = {
+        "core": PROMPTS_DIR,
+        "abilities": os.path.join(PROMPTS_DIR, "abilities")
+    }
 
+    count = 0
+    for category, base_path in target_dirs.items():
+        if not os.path.exists(base_path): continue
+        
+        for filename in os.listdir(base_path):
+            # 오직 텍스트(.txt) 파일만 읽으며, 백업 폴더는 무시합니다.
+            if filename.endswith(".txt"):
+                filepath = os.path.join(base_path, filename)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        # '핵심/파일명' 또는 '파일명' 형식으로 키를 생성하여 저장합니다.
+                        key = f"{category}/{filename}" if category != "core" else filename
+                        _PROMPT_CACHE[key] = f.read().strip()
+                        count += 1
+                except Exception as e:
+                    logger.error(f"지침서({filename}) 암기 실패: {e}")
+
+    logger.info(f"✅ 총 {count}개의 지침서를 완벽하게 암기했습니다. 이제 분석 시 디스크를 확인하지 않습니다.")
+
+def _read_prompt_file(filename, subfolder=None):
+    """
+    [V12.13] 암기된 뇌(캐시)에서 매뉴얼을 즉시 꺼내오는 고속 헬퍼 함수입니다.
+    """
+    key = f"{subfolder}/{filename}" if subfolder else filename
+    
+    # 1. 이미 암기된 내용이 있다면 즉시 반환합니다.
+    if key in _PROMPT_CACHE:
+        return _PROMPT_CACHE[key]
+    
+    # 2. 혹시나 그새 새 파일이 생겼을 경우를 대비한 최소한의 방어책 (실시간 읽기 시도)
     try:
-        if not os.path.exists(filepath):
-            return ""
-            
-        # 1. 파일의 '마지막 수정 시간'을 확인합니다.
-        current_mtime = os.path.getmtime(filepath)
-        
-        # 2. 이미 메모리에 있고, 시간이 바뀌지 않았다면? (초고속 반환!)
-        if filepath in _PROMPT_CACHE:
-            cached = _PROMPT_CACHE[filepath]
-            if cached['mtime'] == current_mtime:
-                return cached['content']
-        
-        # 3. 처음 읽거나 내용이 바뀌었다면? (새로 읽고 메모리 업데이트)
-        with open(filepath, 'r', encoding='utf-8') as f:
-            content = f.read().strip()
-            _PROMPT_CACHE[filepath] = {
-                'content': content,
-                'mtime': current_mtime
-            }
-            # logger.info(f"💡 지침서 최신화 완료: {filename}")
-            return content
-            
-    except Exception as e:
-        logger.error(f"프롬프트 파일({filename}) 로드 실패: {e}")
-        return ""
+        filepath = os.path.join(PROMPTS_DIR, subfolder or "", filename)
+        if os.path.exists(filepath):
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                _PROMPT_CACHE[key] = content # 다음을 위해 암기
+                return content
+    except Exception: pass
+    
+    return ""
 
 def _get_now_info():
     """현재 사용자 시간대의 시각 정보를 비서의 자아에 주입하기 위한 문자열 생성"""

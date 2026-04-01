@@ -9,8 +9,8 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, USER_TIMEZONE, 
 
 # 앞서 우리가 정성껏 만든 주요 도구들을 하나의 커다란 공장 상자로 불러옵니다!
 from mail_parser import fetch_unseen_emails, save_processed_uid
-from ai_processor import process_email_with_ai
-from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, escape_for_tg, send_failure_alert
+from ai_processor import process_email_with_ai, load_all_prompts_to_memory
+from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, escape_for_tg, send_failure_alert, clear_temp_cache
 from thread_manager import format_threads_for_prompt, save_thread_entry, get_thread_msg_id
 from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue, update_retry_status
 from report_manager import update_daily_report, generate_weekly_summary
@@ -50,6 +50,26 @@ async def handle_scheduled_reports(application: Application):
 
     except Exception as e:
         logger.error(f"스케줄 보고서 트리거 중 오류: {e}")
+
+async def handle_cache_reset():
+    """
+    [V12.13] 부장님의 명을 받들어 매주 월요일, 목요일 새벽 3시에 
+    임시 저장소를 싹 청소하는 '대청소 엔진'입니다.
+    """
+    try:
+        tz = pytz.timezone(USER_TIMEZONE)
+        now = datetime.datetime.now(tz)
+        
+        # 새벽 3시(03:00) 정각 근처(1분 내)에만 작동합니다.
+        if now.hour == 3 and now.minute == 0:
+            # 월요일(0) 또는 목요일(3)인지 확인합니다.
+            if now.weekday() in [0, 3]:
+                logger.info(f"🧹 정기 대청소 시간입니다! (요일: {now.strftime('%A')})")
+                clear_temp_cache()
+                # 중복 청소 방지를 위해 살짝 대기
+                await asyncio.sleep(60) 
+    except Exception as e:
+        logger.error(f"정기 대청소 중 오류 발생: {e}")
 
 async def send_daily_business_report(application: Application, target_date=None):
     """[V11.8] 고객사별 슬림 일일 보고서를 작성하여 전달합니다."""
@@ -136,7 +156,10 @@ async def background_mail_checker(application: Application):
     
     while True:
         try:
-            # [V9.0] 매 분마다 현재 시각을 체크하여 보고서 작업 수행
+            # [V12.13] 매분마다 대청소 시간인지 체크
+            await handle_cache_reset()
+            
+            # [V9.0] 매분마다 현재 시각을 체크하여 보고서 작업 수행
             await handle_scheduled_reports(application)
 
             # [V12.13] 매일 새벽 3시(현지 시간 기준)에 스스로 재가동하여 메모리를 정화합니다.
@@ -246,6 +269,9 @@ async def main():
         return
 
     logger.info("텔레그램 봇 두뇌와 통신망을 열심히 뚝딱뚝딱 조립하고 있습니다...")
+    
+    # [V12.13] 모든 지침서(프롬프트)를 미리 암기하여 똑똑한 분석을 준비합니다.
+    load_all_prompts_to_memory()
     
     # 텔레그램 봇의 뼈대와 코어 엔진 장착
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
