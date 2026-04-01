@@ -93,6 +93,21 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
     if not email_body or email_body == "본문 추출 불가 메일" or not GEMINI_API_KEY:
         return _fallback_response()
 
+    # [V12.4] 토큰 세이프가드: 본문 품질 검사 (Sanity Check)
+    # 1. 깨진 글자() 비율 확인 (전체의 20% 이상이면 위험군)
+    replacement_count = email_body.count('')
+    if len(email_body) > 0 and (replacement_count / len(email_body)) > 0.2:
+        return {
+            "status": "알림", "is_ai_error": True, "summary": "⚠️ <b>[토큰 보호]</b> 본문 인코딩이 심하게 깨져 있어(20% 이상) AI 요약을 중단했습니다. 직접 확인이 필요합니다."
+        }
+    
+    # 2. 외계어 패턴(공백 없는 긴 Base64 등) 감지
+    # 띄어쓰기 없이 영어/숫자/+/= 만 100자 이상 이어지는 '기계어 덩어리'가 있는지 확인
+    if re.search(r'[A-Za-z0-9+/]{100,}', email_body):
+        return {
+            "status": "알림", "is_ai_error": True, "summary": "⚠️ <b>[토큰 보호]</b> 해독되지 않은 외계어(Base64) 패턴이 감지되어 AI 분석을 차단했습니다. 직접 확인이 필요합니다."
+        }
+
     # 1. 지능 및 자아 조립
     dynamic_prompt = _read_prompt_file("peani_persona.txt")
     dynamic_prompt += f"\n\n{load_ability('summarizer')}"

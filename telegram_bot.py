@@ -136,7 +136,7 @@ async def send_failure_alert(application: Application, mail_data: dict, retry_co
     """
     message_text = (
         f"🚨 <b>업무 보고: AI 요약 최종 실패</b>\n\n"
-        f"부장님, 주력 엔진(3.0)과 백업 엔진(2.5)을 동원하여 총 {retry_count}회 시도했으나, "
+        f"부장님, 주력 및 백업 엔진(Gemini 2.5 Flash)을 총동원하여 총 {retry_count}회 시도했으나, "
         f"서버 장애로 인해 아래 메일의 요약에 성공하지 못했습니다. 😭\n\n"
         f"📝 <b>메일 제목:</b> {escape_for_tg(mail_data.get('subject', ''))}\n"
         f"👤 <b>보낸 사람:</b> {escape_for_tg(mail_data.get('sender', ''))}\n\n"

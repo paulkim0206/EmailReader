@@ -74,11 +74,20 @@ def get_text_from_email(msg):
         except Exception as e:
             logger.error(f"메일 본문 해석 중 작은 문제 발생: {e}")
 
-    # 일반 텍스트가 있으면 그것을 최우선으로 사용합니다 (가장 깨끗하니까요).
+    # [V12.4] 수술 결과: 표준적인 multipart 구조가 깨졌거나 본문을 못 찾았을 때를 대비한 '강제 해독' 로직 보강
+    if not text_content.strip() and not html_content.strip():
+        try:
+            # 이메일 라이브러리가 본문을 못 찾았을 때, 전체 데이터 덩어리를 하나로 보고 다시 시도합니다.
+            payload = msg.get_payload(decode=True)
+            if payload:
+                text_content = decode_payload(payload, msg.get_content_charset())
+        except Exception: pass
+
+    # 일반 텍스트가 있으면 그것을 최우선으로 사용합니다.
     if text_content.strip():
         return text_content.strip()
     
-    # 일반 텍스트가 없고 HTML 글씨만 있다면, 불필요한 태그(<br>, <div> 등)를 전부 청소하여 글자만 추출합니다.
+    # 일반 텍스트가 없고 HTML 글씨만 있다면, 불필요한 태그를 청소하여 글자만 추출합니다.
     elif html_content.strip():
         # BeautifulSoup 라이브러리 미설치 환경 대비 (순수 정규식으로 HTML 태그 싹둑 제거)
         clean_text = re.sub(r'<[^>]+>', ' ', html_content)
@@ -90,10 +99,10 @@ def get_text_from_email(msg):
 
 def decode_payload(payload, charset):
     """
-    컴퓨터의 다양한 국가별 언어(인코딩) 방식을 처리하여, 
+    [V12.4] 중국(gb18030, gbk) 및 아시아권(big5, euc-jp) 특수 인코딩 지원 화끈하게 확장!
     한국어(utf-8, cp949 등)가 깨지지 않게 단단히 막아주는 보안관 역할입니다.
     """
-    charsets_to_try = [charset, 'utf-8', 'euc-kr', 'cp949', 'iso-8859-1']
+    charsets_to_try = [charset, 'utf-8', 'gb18030', 'gbk', 'euc-kr', 'cp949', 'big5', 'euc-jp', 'iso-8859-1']
     for cs in charsets_to_try:
         if cs:
             try:
