@@ -48,8 +48,6 @@ def get_current_timezone():
 
 USER_TIMEZONE = get_current_timezone()
 
-# 결과물 저장용 로컬 경로 (루트 폴더 내 Email_Reports)
-SAVE_DIRECTORY_PATH = os.getenv("SAVE_DIRECTORY_PATH", os.path.join(BASE_DIR, "Email_Reports"))
 
 # 텔레그램 메일 핑퐁(스레드) 추적 장부 설정
 THREAD_CACHE_FILE = os.path.join(DATA_DIR, "thread_memory.json")

@@ -10,7 +10,6 @@ import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, CommandHandler, MessageHandler, filters
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, TIMEZONE_FILE, USER_TIMEZONE
-from local_storage import create_and_save_report
 
 # 전 세계의 모든 사용자 중, 오직 '나(등록된 소유자)'에게만 알림을 보내고 명령을 받기 위한 검증용 정보입니다.
 # 만약 누군가 내 비서 봇에 몰래 말을 걸어도 ID가 다르면 가차 없이 무시합니다. (보안 철저)
@@ -68,10 +67,9 @@ async def send_email_alert(application: Application, mail_data: dict, ai_result:
             
             # 여러 개의 쪼개진 편지가 왔을 때, 마지막 장 맨 아랫부분 바닥에만 버튼을 달아줍니다.
             if i == len(message_chunks) - 1:
-                # [V11.9] 부장님 요청에 따라 '리포트' 대신 '메일원본'으로 기능 및 명칭 변경
+                # [V11.10] 원본 버튼 삭제로 공간이 넓어져 '요약제외'로 명칭 복구
                 keyboard = [[
-                    InlineKeyboardButton("📌 일일보고서", callback_data=f"rpt_{uid}"),
-                    InlineKeyboardButton("💾 메일원본", callback_data=f"save_{uid}"),
+                    InlineKeyboardButton("📌 보고서", callback_data=f"rpt_{uid}"),
                     InlineKeyboardButton("👎 요약제외", callback_data=f"learn_{uid}")
                 ]]
                 reply_markup = InlineKeyboardMarkup(keyboard)
@@ -172,8 +170,15 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     # 버튼 뒤에 숨겨두었던 암호문 (예: 'save_10번편지')을 가져옵니다.
     data = query.data
     
-    # [새로운 분기 5] 부장님의 "이건 보고서에 넣어!" 명령 (핀 버튼)
-    if data.startswith("rpt_"):
+    # [분기 3] 보안 통과 검사: 암호문에 맞게 분기 처리합니다.
+    if data.startswith("save_"):
+        # [V11.10] 부장님의 지시로 원본 저장 기능은 폐지되었습니다. 
+        # (혹시라도 이전 메시지의 버튼을 누를 경우를 대비하여 안내를 보냅니다.)
+        await query.answer(text="⚠️ 해당 기능(메일 원본 저장)은 부장님 지시로 폐지되었습니다.", show_alert=True)
+        return
+
+    # [새로운 분기 1] 부장님의 "이건 보고서에 넣어!" 명령 (핀 버튼)
+    elif data.startswith("rpt_"):
         uid = data.split("_")[1]
         cache_data = temp_mail_cache.get(uid)
         
@@ -195,46 +200,6 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer(text="⚠️ 너무 오래된 메일이라 정보가 사라졌습니다. (재부팅됨)", show_alert=True)
         return
 
-    # 보안 통과 검사: 암호문에 맞게 분기 처리합니다.
-    if data.startswith("save_"):
-        uid = data.split("_")[1]
-        
-        # 아까 준비해 둔 '임시 상자'에서 이 번호의 메일을 끄집어냅니다.
-        cache_data = temp_mail_cache.get(uid)
-        
-        if cache_data:
-            # 드디어 우리가 앞서 만든 4단계 모듈 '마크다운 자동 생성기'를 가동합니다!
-            success, filepath = create_and_save_report(cache_data["mail"], cache_data["ai"])
-            
-            if success:
-                # [V2.5] 텔레그램으로 파일을 직접 전송합니다! (클라우드 환경 대응)
-                try:
-                    with open(filepath, 'rb') as document:
-                        await context.bot.send_document(
-                            chat_id=query.message.chat_id,
-                            document=document,
-                            filename=os.path.basename(filepath),
-                            caption="✅ 요청하신 HTML 분석 보고서 배달 완료! 📥"
-                        )
-                    # 너무 버튼을 신나게 여러 번 눌러 중복 낭비를 일으키지 않게, 해당 버튼을 깔끔하게 지워줍니다.
-                    await query.edit_message_reply_markup(reply_markup=None)
-                except Exception as e:
-                    logger.error(f"파일 전송 중 오류 발생: {e}")
-                    await context.bot.send_message(
-                        chat_id=query.message.chat_id,
-                        text=f"❌ 파일 전송 중 오류가 발생했습니다: {e}"
-                    )
-            else:
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text="❌ 죄송합니다. 보고서를 작성하다가 작은 소동(오류)이 생겼습니다."
-                )
-        else:
-            await context.bot.send_message(
-                chat_id=query.message.chat_id,
-                text="⚠️ 해당 메일 내용이 컴퓨터의 단기 기억 용량에서 이미 지워졌습니다. (오래된 메일이거나 재부팅됨)"
-            )
-            
     # [새로운 분기 3] 사용자가 AI 학습(👎) 단추를 눌렀을 때!!
     elif data.startswith("learn_"):
         uid = data.split("_")[1]
