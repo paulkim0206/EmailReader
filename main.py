@@ -3,6 +3,7 @@ import asyncio
 import datetime
 import json
 import pytz
+import sys
 from telegram.ext import Application
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, USER_TIMEZONE, REPORTS_DIR, BASE_DIR
 
@@ -137,6 +138,13 @@ async def background_mail_checker(application: Application):
         try:
             # [V9.0] 매 분마다 현재 시각을 체크하여 보고서 작업 수행
             await handle_scheduled_reports(application)
+
+            # [V12.13] 매일 새벽 3시(현지 시간 기준)에 스스로 재가동하여 메모리를 정화합니다.
+            tz = pytz.timezone(USER_TIMEZONE)
+            now = datetime.datetime.now(tz)
+            if now.hour == 3 and now.minute == 0:
+                logger.info("🕒 [새벽 자가 세탁] 시스템을 정화하고 다시 태어납니다...")
+                os.execl(sys.executable, sys.executable, *sys.argv)
             
             # [V1.12.0] 재시도 대기열 확인 및 처리
             pending_retries = get_pending_retries()
