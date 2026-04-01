@@ -364,7 +364,18 @@ async def handle_location_update(update: Update, context: ContextTypes.DEFAULT_T
 
 async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
-    await update.message.reply_text("✅ 🤖 비서 봇이 정상적으로 살아있으며, 열심히 메일을 감시하고 있습니다!")
+    
+    # [V12.0] 부장님을 위한 '하단 고정형 스마트 메뉴' 설계 및 장착
+    keyboard = [['❓ 도움말', '📝 메모현황']]
+    # resize_keyboard=True 로 하면 버튼 크기가 화면에 맞게 아주 콤팩트하고 예쁘게 조절됩니다.
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(
+        "✅ 🤖 <b>비서 피아니가 정상적으로 살아있으며, 부장님의 모든 명령을 대기 중입니다!</b>\n\n"
+        "하단의 버튼을 누르시면 도움말을 보거나 메모 현황을 즉시 확인하실 수 있습니다. 👇",
+        reply_markup=reply_markup,
+        parse_mode="HTML"
+    )
 
 async def handle_time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -656,6 +667,15 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     user_text = update.message.text
     
+    # [V12.0] 하단 고정 메뉴 감지
+    if user_text == "❓ 도움말":
+        # 도움말은 기계적인 나열이므로 0.1초 만에 파이썬이 즉각 응답합니다.
+        await handle_help_command(update, context)
+        return
+
+    # [중요] '📝 메모현황' 버튼은 별도로 가로채지 않습니다. 
+    # 부장님의 지시대로 피아니(AI)가 직접 뇌를 써서 미완료 업무만 브리핑하도록 대화 흐름을 유지합니다.
+
     # 1. 사용자 말씀 기록
     try:
         from chat_manager import save_chat_log
