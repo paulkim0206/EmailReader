@@ -25,6 +25,7 @@ def _get_ai_client():
 
 # [V12.13] 프롬프트 뇌(뇌세포) 일괄 이식: 기동 시 모든 지침서를 100% 메모리에 상주시킵니다.
 _PROMPT_CACHE = {} 
+_BASE_SUMMARIZER_PROMPT = "" # [V12.13] 요약 업무를 위해 미리 조립된 지침서 완제품
 
 def load_all_prompts_to_memory():
     """
@@ -58,6 +59,14 @@ def load_all_prompts_to_memory():
                     logger.error(f"지침서({filename}) 암기 실패: {e}")
 
     logger.info(f"✅ 총 {count}개의 지침서를 완벽하게 암기했습니다. 이제 분석 시 디스크를 확인하지 않습니다.")
+    
+    # 2. [V12.13] 베이스 지침서 사전 조립 (Pre-assembly)
+    # 메일 분석 시 매번 조립하지 않고, 미리 완성된 지침서를 메모리에 들고 있게 합니다.
+    global _BASE_SUMMARIZER_PROMPT
+    persona = _read_prompt_file("peani_persona.txt")
+    summarizer = _read_prompt_file("summarizer.txt", subfolder="abilities")
+    _BASE_SUMMARIZER_PROMPT = f"{persona}\n\n{summarizer}"
+    logger.info("⚡ 요약 전문가용 베이스 지침서 사전 조립 완료!")
 
 def _read_prompt_file(filename, subfolder=None):
     """
@@ -93,7 +102,11 @@ def _get_now_info():
 def _clean_ai_json(text):
     """AI 응답에서 불필요한 마크다운 기호(```json 등)를 제거하고 순수 JSON만 추출"""
     if not text: return ""
-    return re.sub(r'```json\n?|```', '', text).strip()
+    # 1. ```json 또는 ``` 문구를 제거합니다. (대소문자 무관)
+    cleaned = re.sub(r'```(?:json)?\n?|```', '', text, flags=re.IGNORECASE).strip()
+    # 2. JSON 시작({)과 끝(}) 사이의 내용만 남깁니다. (찌꺼기 텍스트 방어)
+    json_match = re.search(r'(\{.*\})', cleaned, re.DOTALL)
+    return json_match.group(1) if json_match else cleaned
 
 # --- [기존 외부 호출 함수 리팩토링] ---
 
@@ -121,9 +134,10 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
             "status": "알림", "is_ai_error": True, "summary": "⚠️ <b>[토큰 보호]</b> 해독되지 않은 대량의 데이터(Base64)가 감지되어 AI 분석을 차단했습니다. 직접 확인이 필요합니다."
         }
 
-    # 1. 지능 및 자아 조립
-    dynamic_prompt = _read_prompt_file("peani_persona.txt")
-    dynamic_prompt += f"\n\n{load_ability('summarizer')}"
+    # 1. [V12.13] 이미 조립된 '완성형 지침서'를 즉시 가져옵니다.
+    dynamic_prompt = _BASE_SUMMARIZER_PROMPT
+    if not dynamic_prompt: # 만약 초기화 전이라면 실시간 조립
+        dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('summarizer')}"
     
     try:
         from feedback_manager import load_preferences, load_corrections
@@ -260,11 +274,14 @@ def generate_weekly_summary_ai(daily_reports: dict) -> dict:
             week_text += f"\n[{day}]\n" + "\n".join([f"- {t['category']}: {', '.join(t['items'])}" for t in data["topics"]])
 
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
+        client = _get_ai_client()
+        if not client: return {"weekly_summary": "분석 실패", "key_achievements": []}
+        
         response = client.models.generate_content(
             model=AI_MODEL, contents=week_text,
             config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         )
         return json.loads(_clean_ai_json(response.text))
-    except Exception:
+    except Exception as e:
+        logger.error(f"주간 보고서 분석 중 오류: {e}")
         return {"weekly_summary": "분석 실패", "key_achievements": []}
