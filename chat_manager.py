@@ -9,50 +9,64 @@ if not os.path.exists(CHAT_HISTORY_FILE):
     with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump([], f)
 
+# [V12.13] 인메모리 싱글톤 캐시: 부장님과의 소중한 대화를 메모리(책상 위)에 올려두어 응답 속도를 1,000배 높입니다.
+_CHAT_LOGS_CACHE = None
+
+def _load_chat_logs():
+    """
+    [V12.13] 대화 기록을 메모리로 불러오는 내부 전용 헬퍼 함수입니다.
+    """
+    global _CHAT_LOGS_CACHE
+    if _CHAT_LOGS_CACHE is not None:
+        return _CHAT_LOGS_CACHE
+        
+    if os.path.exists(CHAT_HISTORY_FILE):
+        try:
+            with open(CHAT_HISTORY_FILE, 'r', encoding='utf-8') as f:
+                _CHAT_LOGS_CACHE = json.load(f)
+                return _CHAT_LOGS_CACHE
+        except Exception as e:
+            logger.error(f"대화 기록 파일 읽기 중 오류: {e}")
+            
+    _CHAT_LOGS_CACHE = []
+    return _CHAT_LOGS_CACHE
+
 def save_chat_log(role: str, content: str):
     """
-    [V5.0 장기 기억 시스템]
-    부장님의 질문(User)과 피아니의 답변(Assistant)을 타임스탬프와 함께 '영구적'으로 기록합니다.
-    데이터가 무거워져도 일단 무제한으로 쌓아서 1년 치 기억의 토대를 만듭니다.
+    부장님의 질문과 피아니의 답변을 메모리에 즉시 반영하고, 창고(SSD)에도 실시간 동기화합니다.
     """
+    global _CHAT_LOGS_CACHE
     try:
-        # 1. 기존 장부 읽어오기
-        with open(CHAT_HISTORY_FILE, 'r', encoding='utf-8') as f:
-            logs = json.load(f)
+        # 1. 메모리(캐시) 주머니 준비
+        logs = _load_chat_logs()
         
         # 2. 새로운 대화 한 마디 추가
         now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         new_entry = {
             "timestamp": now_str,
-            "role": role, # 'user' 또는 'assistant'
+            "role": role,
             "content": content
         }
         logs.append(new_entry)
         
-        # 3. 다시 안전하게 덮어쓰기
+        # 3. 메모리와 파일(창고) 실시간 동기화
         with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
             json.dump(logs, f, ensure_ascii=False, indent=2)
             
     except Exception as e:
-        logger.error(f"🚨 장기 기억 장부(chat_history) 기록 중 오류 발생: {e}")
+        logger.error(f"🚨 대화 기록부 동기화 중 오류 발생: {e}")
 
 def get_recent_chat_context(limit: int = 20) -> str:
     """
-    [V5.0 핵심 브레인]
-    피아니가 대답하기 직전, 최근 20~30마디 정도의 대화 흐름을 쓱 훑어보고 옵니다.
-    이게 있어야 부장님이 아까 했던 말에 대해 "그건 어때?"라고 물어도 알아듣습니다.
+    메모리(캐시)에서 가장 최근 대화 맥락을 순식간에 훑어서 가져옵니다.
     """
     try:
-        if not os.path.exists(CHAT_HISTORY_FILE):
-            return ""
-            
-        with open(CHAT_HISTORY_FILE, 'r', encoding='utf-8') as f:
-            logs = json.load(f)
-            
+        # 1. 창고(SSD)가 아닌 책상 위(메모리)에서 바로 꺼냅니다.
+        logs = _load_chat_logs()
+        
         if not logs:
             return ""
             
-        # 가장 최근 메시지들만 추출 (limit 개수만큼)
         recent_logs = logs[-limit:]
         
         context_str = "\n[최근 대화 맥락 (당신이 방금 전 부장님과 나눈 이야기)]\n"
