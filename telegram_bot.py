@@ -715,7 +715,6 @@ def setup_telegram_handlers(application: Application):
     application.add_handler(CommandHandler("status", command_status))
     application.add_handler(CommandHandler("note", handle_memo_command))
     application.add_handler(CommandHandler("update", handle_update_command))
-    application.add_handler(CommandHandler("help", handle_help_command))
     application.add_handler(CommandHandler("notelist", handle_export_notes))
     
     # [V7.0] 시간 시계 관리 명령어 (메뉴 호출)
