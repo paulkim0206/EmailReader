@@ -4,17 +4,30 @@ import datetime
 from config import RETRY_QUEUE_FILE, RETRY_WAIT_MINUTES, logger
 
 
+# [V12.13] 인메모리 싱글톤 캐시: 재시도 대기열을 메모리에 상주시킵니다.
+_QUEUE_CACHE = None
+
 def load_retry_queue():
+    """대기열을 메모리에서 즉시 꺼내거나, 처음이면 파일에서 읽어옵니다."""
+    global _QUEUE_CACHE
+    if _QUEUE_CACHE is not None:
+        return _QUEUE_CACHE
+        
     if os.path.exists(RETRY_QUEUE_FILE):
         try:
             with open(RETRY_QUEUE_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return []
-
+                _QUEUE_CACHE = json.load(f)
+                return _QUEUE_CACHE
+        except Exception as e:
+            logger.error(f"재시도 대기열 파일을 읽는데 실패했습니다: {e}")
+            
+    _QUEUE_CACHE = []
+    return _QUEUE_CACHE
 
 def save_retry_queue(queue):
+    """대기열의 변경사항을 메모리에 반영하고 SSD에 실시간 동기화합니다."""
+    global _QUEUE_CACHE
+    _QUEUE_CACHE = queue
     try:
         with open(RETRY_QUEUE_FILE, "w", encoding="utf-8") as f:
             json.dump(queue, f, ensure_ascii=False, indent=4)

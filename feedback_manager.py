@@ -2,20 +2,32 @@ import json
 import os
 from config import USER_PREFERENCES_FILE, USER_CORRECTIONS_FILE, logger
 
+# [V12.13] 인메모리 싱글톤 캐시: AI의 학습 내용을 메모리에 상주시킵니다.
+_PREFERENCES_CACHE = None
+_CORRECTIONS_CACHE = None
+
 def load_preferences():
-    """AI가 기피해야 할 [학습 노트]를 하드디스크에서 꺼내어 리스트로 반환합니다."""
+    """AI가 기피해야 할 [학습 노트]를 메모리에서 즉시 꺼내거나, 처음이면 파일에서 읽어옵니다."""
+    global _PREFERENCES_CACHE
+    if _PREFERENCES_CACHE is not None:
+        return _PREFERENCES_CACHE
+        
     if not os.path.exists(USER_PREFERENCES_FILE):
-        return []
+        _PREFERENCES_CACHE = []
+        return _PREFERENCES_CACHE
     
     try:
         with open(USER_PREFERENCES_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            _PREFERENCES_CACHE = json.load(f)
+            return _PREFERENCES_CACHE
     except Exception as e:
         logger.error(f"비서의 스킵 학습 노트를 읽는데 실패했습니다: {e}")
         return []
 
 def save_preferences(pref_list):
-    """(제한 없음!) 주인이 싫어하는 새로운 메일 패턴을 장부에 추가하여 저장합니다."""
+    """학습한 내용을 메모리에 반영하고, 창고(SSD)에도 실시간 동기화합니다."""
+    global _PREFERENCES_CACHE
+    _PREFERENCES_CACHE = pref_list
     try:
         with open(USER_PREFERENCES_FILE, "w", encoding="utf-8") as f:
             json.dump(pref_list, f, ensure_ascii=False, indent=4)
@@ -49,19 +61,27 @@ def add_learning_preference(subject, summary):
 # --- V3.2 오답 노트(Corrections) 관리 기능 ---
 
 def load_corrections():
-    """AI가 요약 시 명심해야 할 '오답 노트'를 읽어옵니다."""
+    """AI가 요약 시 명심해야 할 '오답 노트'를 메모리에서 즉시 읽어옵니다."""
+    global _CORRECTIONS_CACHE
+    if _CORRECTIONS_CACHE is not None:
+        return _CORRECTIONS_CACHE
+        
     if not os.path.exists(USER_CORRECTIONS_FILE):
-        return []
+        _CORRECTIONS_CACHE = []
+        return _CORRECTIONS_CACHE
     
     try:
         with open(USER_CORRECTIONS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            _CORRECTIONS_CACHE = json.load(f)
+            return _CORRECTIONS_CACHE
     except Exception as e:
         logger.error(f"오답 노트를 읽어오는데 실패했습니다: {e}")
         return []
 
 def save_corrections(corr_list):
-    """사용자가 지적한 새로운 오답 규칙을 장부에 저장합니다."""
+    """새로운 오답 규칙을 메모리에 반영하고 SSD에 안전하게 저장합니다."""
+    global _CORRECTIONS_CACHE
+    _CORRECTIONS_CACHE = corr_list
     try:
         with open(USER_CORRECTIONS_FILE, "w", encoding="utf-8") as f:
             json.dump(corr_list, f, ensure_ascii=False, indent=4)
