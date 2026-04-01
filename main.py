@@ -195,13 +195,10 @@ async def background_mail_checker(application: Application):
                             remove_from_retry_queue(retry_uid)
                             logger.info(f"장부 저장 성공 (UID: {retry_mail.get('uid')})")
                         else:
-                            # [V12.8] 지능형 항복 & 원본 배달: 마지막 기회 실패 시 그제서야 서버에서 원본을 가져옵니다 (리소스 절약형)
-                            logger.error(f"❌ [최종 실패] 5분 뒤 재시도마저 실패! 원본 패치 시도: {retry_mail.get('subject')}")
+                            # [V12.8] 지능형 항복: 마지막 기회 실패 시 부장님께 즉시 최종 보고합니다.
+                            logger.error(f"❌ [최종 실패] 5분 뒤 재시도마저 실패: {retry_mail.get('subject')}")
                             
-                            from mail_parser import fetch_raw_eml
-                            raw_eml = await asyncio.to_thread(fetch_raw_eml, retry_uid)
-                            
-                            await send_failure_alert(application, retry_mail, raw_eml)
+                            await send_failure_alert(application, retry_mail)
                             remove_from_retry_queue(retry_uid)
                     except Exception as re:
                         logger.error(f"재시도 처리 중 개별 오류 발생 (스킵하고 다음 진행): {re}")
