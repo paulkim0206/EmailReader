@@ -95,7 +95,7 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
 
     # 1. 지능 및 자아 조립
     dynamic_prompt = _read_prompt_file("peani_persona.txt")
-    dynamic_prompt += f"\n\n{load_ability('summarizer')}\n\n{load_ability('technical_expert')}"
+    dynamic_prompt += f"\n\n{load_ability('summarizer')}"
     
     try:
         from feedback_manager import load_preferences, load_corrections
@@ -181,10 +181,11 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
         return "🚨 앗, 부장님! 방금 머리가 좀 아파서 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?"
 
 def generate_daily_report_ai(raw_summaries: list) -> dict:
-    """[V11.5] 일일 보고서 생성 리팩토링"""
+    """[V11.8] 일일 보고서 전용 지침(daily_strategy)을 사용하여 고객사별 요약을 생성합니다."""
     if not GEMINI_API_KEY or not raw_summaries: return {"report": "데이터 부족"}
 
-    dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('summarizer')}\n\n{load_ability('strategy_chief')}"
+    # 일일 보고서 전용 지침으로 교체 (더 슬림하고 명확한 비즈니스 분석 수행)
+    dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('daily_strategy')}"
     data_text = "\n".join([f"제목: {i['subject']} | 요약: {i['summary']}" for i in raw_summaries])
 
     try:
@@ -200,10 +201,11 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
         return {"topics": [{"category": "오류", "items": ["보고서 생성 실패"]}]}
 
 def generate_weekly_summary_ai(daily_reports: dict) -> dict:
-    """[V11.5] 주간 보고서 생성 리팩토링"""
+    """[V11.8] 주간 보고서 전용 지침(weekly_strategy)을 사용하여 한 주의 흐름을 통합 분석합니다."""
     if not GEMINI_API_KEY or not daily_reports: return {"summary": "데이터 부족"}
 
-    dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('strategy_chief')}"
+    # 주간 보고서 전용 지침으로 교체
+    dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('weekly_strategy')}"
     week_text = ""
     for day, data in daily_reports.items():
         if isinstance(data, dict) and "topics" in data:

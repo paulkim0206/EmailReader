@@ -6,10 +6,8 @@
 data/
 logs/
 Email_Reports/
-Saved_Reports/
 
 # [로그] 개별 로그 파일 (루트에 남은 잔재들 차단)
-app.log
 *.log
 
 # [데이터] 파일 확장자 기반 2차 방어

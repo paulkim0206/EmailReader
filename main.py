@@ -19,72 +19,104 @@ LAST_REPORT_LOG = os.path.join(BASE_DIR, "data", "last_report.json")
 
 async def handle_scheduled_reports(application: Application):
     """
-    [V9.0] 매일/매주 오전 6시가 되면 보고서를 작성하여 부장님께 배달합니다.
+    [V11.8] 매일 오전 6시에 보고서를 자동 발송합니다.
+    월요일은 '주간 보고', 그 외 요일은 '일일 보고'를 전담 비서(함수)가 처리합니다.
     """
     try:
-        # 1. 부장님 시간대로 현재 시각 확인
         tz = pytz.timezone(USER_TIMEZONE)
         now = datetime.datetime.now(tz)
         today_str = now.strftime("%Y-%m-%d")
         
-        # 06시 정각~07시 사이인지 확인
         if now.hour != 6:
             return
 
-        # 2. 이미 보고했는지 장부 확인
         if os.path.exists(LAST_REPORT_LOG):
             with open(LAST_REPORT_LOG, "r") as f:
                 last_log = json.load(f)
                 if last_log.get("date") == today_str:
-                    return # 오늘 이미 보고 완료
+                    return
 
-        # [V11.4] 부장님의 비즈니스 리듬에 맞춘 정기 보고 체계 (월요일: 주간 보고 / 화~일요일: 일일 보고)
-        if now.weekday() == 0:  # 월요일 (0)
-            logger.info("📅 오늘은 월요일입니다. 지난주 통합 주간 리포트 작성을 시작합니다.")
-            weekly_summary = await asyncio.to_thread(generate_weekly_summary)
-            
-            if weekly_summary:
-                msg = "📊 <b>[피아니] 주간 업무 총괄 리포트 (지난주 월~토)</b>\n\n"
-                msg += f"🧐 <b>주간 전술적 분석:</b>\n{weekly_summary.get('주간 전술적 분석', '분석 완료')}\n\n"
-                
-                if "key_achievements" in weekly_summary:
-                    msg += "🏆 <b>핵심 추진 성과:</b>\n"
-                    for item in weekly_summary["key_achievements"]:
-                        msg += f"- {escape_for_tg(item)}\n"
-                
-                msg += "\n실무가 시작되는 월요일입니다. 부장님, 이번 주도 건승하십시오! 👍"
-                await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=msg, parse_mode="HTML")
-                logger.info("주간 보고서 텔레그램 발송 완료")
+        # [V11.8] 업무 분리: 월요일은 주간 통합, 나머지는 일일 업무 보고
+        if now.weekday() == 0:
+            await send_weekly_business_report(application)
         else:
-            # 화~일요일 (1~6): 어제의 업무를 요약하는 일일 보고서를 작성합니다.
-            logger.info(f"⏰ {now.strftime('%A')} 아침! 일일 비즈니스 리포트 생성을 시작합니다.")
-            daily_json = await asyncio.to_thread(update_daily_report)
-            
-            if daily_json:
-                msg = f"☀️ <b>[피아니] 일일 비즈니스 리포트 ({now.strftime('%Y-%m-%d')})</b>\n\n"
-                msg += f"🧐 <b>전략적 총평:</b>\n{daily_json.get('전략적 총평', '분석 완료')}\n\n"
-                
-                for topic in daily_json.get("topics", []):
-                    msg += f"📌 <b>{topic['category']}</b>\n"
-                    for item in topic.get("items", []):
-                        msg += f"- {escape_for_tg(item)}\n"
-                    msg += "\n"
-                
-                if "urgent_actions" in daily_json and daily_json["urgent_actions"]:
-                    msg += "🚩 <b>긴급 조치 요구:</b>\n"
-                    for action in daily_json["urgent_actions"]:
-                        msg += f"- {escape_for_tg(action)}\n"
-                
-                await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=msg, parse_mode="HTML")
-                logger.info("일일 보고서 텔레그램 발송 완료")
+            await send_daily_business_report(application)
 
-        # 5. 장부에 오늘 보고 마쳤다고 기록
+        # 장부에 기록 (보고 완료)
         os.makedirs(os.path.dirname(LAST_REPORT_LOG), exist_ok=True)
         with open(LAST_REPORT_LOG, "w") as f:
             json.dump({"date": today_str}, f)
 
     except Exception as e:
-        logger.error(f"스케줄 보고서 작성 중 오류 발생: {e}")
+        logger.error(f"스케줄 보고서 트리거 중 오류: {e}")
+
+async def send_daily_business_report(application: Application, target_date=None):
+    """[V11.8] 고객사별 슬림 일일 보고서를 작성하여 전달합니다."""
+    try:
+        from report_manager import update_daily_report
+        logger.info("📅 일일 비즈니스 리포트 생성을 시작합니다.")
+        daily_json = await asyncio.to_thread(update_daily_report, target_date)
+        
+        if daily_json:
+            disp_date = target_date if target_date else (datetime.datetime.now(pytz.timezone(USER_TIMEZONE))).strftime('%Y-%m-%d')
+            msg = f"☀️ <b>[피아니] 일일 비즈니스 리포트 ({disp_date})</b>\n\n"
+            
+            # [핵심] 고객사별로 묶어서 슬림하게 출력 (줄 간격 1줄 규칙 적용)
+            client_reports = daily_json.get("client_reports", [])
+            if client_reports:
+                for report in client_reports:
+                    msg += f"🏢 <b>{escape_for_tg(report.get('client', '기타'))}</b>\n"
+                    for item in report.get("summaries", []):
+                        msg += f"- {escape_for_tg(item)}\n\n" # 요약 간 줄 간격 추가
+            else:
+                # 구형 데이터 호환 처리 (topics)
+                for topic in daily_json.get("topics", []):
+                    msg += f"📌 <b>{topic.get('category', '분류')}</b>\n"
+                    for item in topic.get("items", []):
+                        msg += f"- {escape_for_tg(item)}\n"
+                    msg += "\n"
+
+            # 핵심 성과
+            achievements = daily_json.get("key_achievements", [])
+            if achievements:
+                msg += "🏆 <b>오늘의 핵심 성과:</b>\n"
+                for ach in achievements:
+                    msg += f"- {escape_for_tg(ach)}\n"
+            
+            await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=msg, parse_mode="HTML")
+            logger.info("일일 보고서 텔레그램 발송 완료")
+    except Exception as e:
+        logger.error(f"일일 보고서 발송 실패: {e}")
+
+async def send_weekly_business_report(application: Application):
+    """[V11.8] 한 주의 흐름을 분석한 주간 통합 리포트를 전달합니다."""
+    try:
+        from report_manager import generate_weekly_summary
+        logger.info("📅 주간 업무 총괄 리포트 작성을 시작합니다.")
+        weekly_summary = await asyncio.to_thread(generate_weekly_summary)
+        
+        if weekly_summary:
+            msg = "📊 <b>[피아니] 주간 업무 총괄 리포트</b>\n\n"
+            msg += f"🧐 <b>주간 전술적 분석:</b>\n{escape_for_tg(weekly_summary.get('주간 전술적 분석', '분석 완료'))}\n\n"
+            
+            achievements = weekly_summary.get("key_achievements", [])
+            if achievements:
+                msg += "🏆 <b>이번 주 핵심 추진 성과:</b>\n"
+                for item in achievements:
+                    msg += f"- {escape_for_tg(item)}\n"
+                msg += "\n"
+                
+            next_steps = weekly_summary.get("next_steps", [])
+            if next_steps:
+                msg += "🏹 <b>차주 대응 제언:</b>\n"
+                for item in next_steps:
+                    msg += f"- {escape_for_tg(item)}\n"
+            
+            msg += "\n실무가 시작되는 월요일입니다. 부장님, 이번 주도 건승하십시오! 👍"
+            await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=msg, parse_mode="HTML")
+            logger.info("주간 보고서 텔레그램 발송 완료")
+    except Exception as e:
+        logger.error(f"주간 보고서 발송 실패: {e}")
 
 async def background_mail_checker(application: Application):
     """

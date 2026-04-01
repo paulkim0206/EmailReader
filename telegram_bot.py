@@ -588,16 +588,27 @@ async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.
             
             if report_data:
                 summary_msg = f"✅ <b>{target_date} 일일 업무 보고서 생성을 완료했습니다!</b>\n\n"
-                summary_msg += f"🧐 <b>전략적 총평:</b>\n{report_data.get('전략적 총평', '분석 중...')}\n\n"
                 
-                if "topics" in report_data:
-                    for topic in report_data["topics"]:
-                        summary_msg += f"📌 <b>{topic.get('category', '분류 미상')}:</b> {', '.join(topic.get('items', []))}\n"
+                # [V11.8] 신규 고객사 중심 구조 반영
+                client_reports = report_data.get("client_reports", [])
+                if client_reports:
+                    for report in client_reports:
+                        summary_msg += f"🏢 <b>{escape_for_tg(report.get('client', '기타'))}</b>\n"
+                        for item in report.get("summaries", []):
+                            summary_msg += f"- {escape_for_tg(item)}\n\n"
+                else:
+                    # 구형 데이터 호환
+                    for topic in report_data.get("topics", []):
+                        summary_msg += f"📌 <b>{topic.get('category', '분류')}</b>\n"
+                        for item in topic.get("items", []):
+                            summary_msg += f"- {escape_for_tg(item)}\n"
+                        summary_msg += "\n"
                 
-                if report_data.get("urgent_actions"):
-                    summary_msg += "\n🚩 <b>긴급 조치 요구:</b>\n"
-                    for action in report_data["urgent_actions"]:
-                        summary_msg += f"- {action}\n"
+                achievements = report_data.get("key_achievements", [])
+                if achievements:
+                    summary_msg += "🏆 <b>오늘의 핵심 성과:</b>\n"
+                    for ach in achievements:
+                        summary_msg += f"- {escape_for_tg(ach)}\n"
                 
                 summary_msg += f"\n정해진 경로(`Email_Reports/` 및 `data/reports/`)에 안전하게 보관했습니다. 📋✨"
                 await update.message.reply_text(summary_msg, parse_mode="HTML")
@@ -612,12 +623,20 @@ async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.
         
         if report_data:
             summary_msg = f"✅ <b>금주 주간 업무 보고서 작성을 완료했습니다!</b>\n\n"
-            summary_msg += f"📊 <b>주간 전술적 분석:</b>\n{report_data.get('주간 전술적 분석', '분석 완료')}\n\n"
+            summary_msg += f"📊 <b>주간 전술적 분석:</b>\n{escape_for_tg(report_data.get('주간 전술적 분석', '분석 완료'))}\n\n"
             
-            if "key_achievements" in report_data:
-                summary_msg += "🏆 <b>핵심 추진 성과:</b>\n"
-                for item in report_data["key_achievements"]:
-                    summary_msg += f"- {item}\n"
+            achievements = report_data.get("key_achievements", [])
+            if achievements:
+                summary_msg += "🏆 <b>이번 주 핵심 추진 성과:</b>\n"
+                for item in achievements:
+                    summary_msg += f"- {escape_for_tg(item)}\n"
+                summary_msg += "\n"
+            
+            next_steps = report_data.get("next_steps", [])
+            if next_steps:
+                summary_msg += "🏹 <b>차주 대응 제언:</b>\n"
+                for item in next_steps:
+                    summary_msg += f"- {escape_for_tg(item)}\n"
             
             summary_msg += f"\n부장님의 전략적 의사결정을 돕기 위해 최선을 다해 분석했습니다. 수고하셨습니다! 👍"
             await update.message.reply_text(summary_msg, parse_mode="HTML")
