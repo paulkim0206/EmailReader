@@ -65,9 +65,9 @@ def _get_now_info():
     try:
         tz = pytz.timezone(USER_TIMEZONE)
         now = datetime.datetime.now(tz)
-        return f"\n\n[현재 시간 자각 지침]\n오늘은 {now.strftime('%Y-%m-%d (%A)')} 이며 시각은 {now.strftime('%H:%M:%S')} 입니다."
+        return f"\n\n(참고: 서버시각 {now.strftime('%Y-%m-%d %H:%M:%S')})"
     except Exception:
-        return f"\n\n[현재 시간] {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        return f"\n\n(참고: 서버시각 {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')})"
 
 def _clean_ai_json(text):
     """AI 응답에서 불필요한 마크다운 기호(```json 등)를 제거하고 순수 JSON만 추출"""
