@@ -377,8 +377,8 @@ async def handle_location_update(update: Update, context: ContextTypes.DEFAULT_T
 async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
     
-    # [V12.0] 부장님을 위한 '하단 고정형 스마트 메뉴' 설계 및 장착
-    keyboard = [['❓ 도움말', '📝 메모현황']]
+    # [V12.16] 부장님을 위한 '하단 고정형 스마트 메뉴' 설계 및 장착
+    keyboard = [['❓ 도움말', '📝 메모현황', '🔄 업데이트']]
     # resize_keyboard=True 로 하면 버튼 크기가 화면에 맞게 아주 콤팩트하고 예쁘게 조절됩니다.
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
@@ -672,6 +672,11 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if user_text == "❓ 도움말":
         # 도움말은 기계적인 나열이므로 0.1초 만에 파이썬이 즉각 응답합니다.
         await handle_help_command(update, context)
+        return
+    
+    elif user_text == "🔄 업데이트":
+        # 업데이트 버튼 클릭 시 즉시 시스템 패치 핸들러를 호출합니다.
+        await handle_update_command(update, context)
         return
 
     # [중요] '📝 메모현황' 버튼은 별도로 가로채지 않습니다. 
