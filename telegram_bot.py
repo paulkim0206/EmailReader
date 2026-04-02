@@ -555,7 +555,7 @@ async def handle_update_command(update: Update, context: ContextTypes.DEFAULT_TY
             await update.message.reply_text(
                 f"✅ <b>업데이트 성공!</b>\n"
                 f"새로운 패치가 성공적으로 장착되었습니다.\n\n"
-                f"📌 <b>버전 정보:</b> <code>{short_id}</code>\n"
+                f"📌 <b>버전 정보:</b> <code>{short_id}</code>\n\n"
                 f"🤖 3초 뒤, 피아니가 스스로 재부팅하여 새로운 패치를 적용합니다. 잠시 후 뵙겠습니다!",
                 parse_mode="HTML"
             )
