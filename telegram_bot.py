@@ -533,7 +533,17 @@ async def handle_update_command(update: Update, context: ContextTypes.DEFAULT_TY
         )
         
         if result.returncode == 0:
-            # [V12.16] 복잡한 파일 목록 대신, 현재의 짧은 버전 ID(Git Hash)만 추출하여 보고합니다.
+            stdout = result.stdout.strip()
+            
+            # [V12.16] 지능형 조건부 업데이트: 이미 최신 상태라면 재부팅 없이 즉시 보고 종료
+            if "Already up to date" in stdout:
+                await update.message.reply_text(
+                    "✅ <b>이미 최신 상태입니다!</b>\n\n현재 피아니의 뇌(코드)는 가장 똑똑한 최신 버전입니다. 별도의 재부팅 없이 그대로 업무를 계속하겠습니다.\n🫡 부장님의 소중한 시간을 아꼈습니다!",
+                    parse_mode="HTML"
+                )
+                return
+
+            # 새로운 패치가 있는 경우에만 아래의 '재부팅' 과정을 진행합니다.
             rev_result = await asyncio.to_thread(
                 subprocess.run,
                 ['git', 'rev-parse', '--short', 'HEAD'],
@@ -544,7 +554,7 @@ async def handle_update_command(update: Update, context: ContextTypes.DEFAULT_TY
 
             await update.message.reply_text(
                 f"✅ <b>업데이트 성공!</b>\n"
-                f"최신 기능을 성공적으로 장착했습니다.\n\n"
+                f"새로운 패치가 성공적으로 장착되었습니다.\n\n"
                 f"📌 <b>버전 정보:</b> <code>{short_id}</code>\n"
                 f"🤖 3초 뒤, 피아니가 스스로 재부팅하여 새로운 패치를 적용합니다. 잠시 후 뵙겠습니다!",
                 parse_mode="HTML"
