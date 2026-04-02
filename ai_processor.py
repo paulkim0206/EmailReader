@@ -217,19 +217,18 @@ def _fallback_response():
     }
 
 def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
-    """[V11.5] 채팅 환경 즉시 백업 및 헬퍼 통합 버전"""
+    """
+    [V12.16] 초고성능 실시간 기억력 이식 (True Multi-turn API 적용)
+    단순히 '장부'를 읽는 것이 아니라, 부장님과 방금 나눈 대화를 실제로 '기억'하게 합니다.
+    """
     if not GEMINI_API_KEY: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
 
-    # 지능 조립
+    # 1. 수석 비서용 정체성 조립 (System Persona)
+    # 대화 시에는 '말수 제한 봉인'이 해제된 성격과 비서의 능동적 지침을 합체합니다.
     chat_prompt = _read_prompt_file("peani_persona.txt")
     chat_prompt += f"\n\n{load_ability('secretary')}\n\n{_read_prompt_file('telegram_commands.txt')}"
     
-    # 맥락/메모/시간 주입
-    try:
-        from chat_manager import get_recent_chat_context
-        chat_prompt += "\n\n" + get_recent_chat_context(limit=30)
-    except Exception: pass
-
+    # 2. 고정 지식(수첩/시간) 주입
     try:
         from memo_manager import get_active_memos_text
         chat_prompt += f"\n\n[부장님 수첩 현황]\n{get_active_memos_text()}"
@@ -237,24 +236,39 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
 
     chat_prompt += _get_now_info()
 
+    # 3. 답장(Reply) 시 맥락 강조 (부장님이 무엇에 대해 말씀하시는지 인지력 강화)
     if replied_text:
         chat_prompt += "\n\n" + _read_prompt_file("reply_mission.txt").format(replied_text=replied_text[:300])
 
     try:
+        from chat_manager import get_recent_chat_history_raw
+        # [V12.16] 핵심!: 단순 텍스트가 아닌 '실제 대화 꾸러미'를 가져옵니다.
+        history_raw = get_recent_chat_history_raw(limit=15)
+        
+        # 제미나이의 '대화 흐름' 방식(user -> model)으로 데이터를 완벽히 변환합니다.
+        contents = []
+        for log in history_raw:
+            role = "user" if log['role'] == 'user' else "model"
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=log['content'])]))
+        
+        # [검증] 만약 대화 기록이 없거나 구조가 이상하면 현재 메시지만이라도 보냅니다.
+        if not contents:
+            contents = [user_message]
+
         client = _get_ai_client()
         if not client: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
         
-        # [V11.8] 속도 복구를 위해 백업 절차 없이 즉시 주력 엔진만 호출합니다.
+        # [혁신] 단일 메시지가 아닌 '누적된 대화 흐름(contents)' 전체를 바탕으로 응답을 생성합니다.
         response = client.models.generate_content(
             model=AI_MODEL, 
-            contents=user_message,
+            contents=contents,
             config=types.GenerateContentConfig(system_instruction=chat_prompt)
         )
         return response.text
         
     except Exception as e:
-        logger.error(f"채팅 엔진 응답 실패: {e}")
-        return "🚨 앗, 부장님! 방금 머리가 좀 아파서 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?"
+        logger.error(f"지능형 대화 엔진 오류: {e}")
+        return "🚨 앗, 부장님! 방금 머릿속에 기억들이 꼬여서 잠시 멍해졌습니다. 다시 말씀해 주시겠어요?"
 
 def generate_daily_report_ai(raw_summaries: list) -> dict:
     """[V11.8] 일일 보고서 전용 지침(daily_strategy)을 사용하여 고객사별 요약을 생성합니다."""

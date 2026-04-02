@@ -84,3 +84,13 @@ def get_recent_chat_context(limit: int = 20) -> str:
     except Exception as e:
         logger.error(f"🚨 대화 맥락 불러오기 실패: {e}")
         return ""
+def get_recent_chat_history_raw(limit: int = 20) -> list:
+    """
+    [V12.16] AI가 문맥을 '실제 대화 흐름'으로 인식할 수 있도록 원본 리스트를 반환합니다.
+    """
+    try:
+        logs = _load_chat_logs()
+        return logs[-limit:] if logs else []
+    except Exception as e:
+        logger.error(f"🚨 원본 대화 기록 불러오기 실패: {e}")
+        return []
