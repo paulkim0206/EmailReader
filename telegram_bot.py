@@ -546,9 +546,9 @@ async def handle_update_command(update: Update, context: ContextTypes.DEFAULT_TY
         logger.error(f"업데이트 중 알 수 없는 오류 발생: {e}")
         await update.message.reply_text(f"🚨 업데이트 중 오류가 발생했습니다: {e}")
 
-async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
+async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.DEFAULT_TYPE, replied_text: str = None) -> str:
     """
-    [V11.10] AI 답변 속에 숨겨진 모든 명령 태그를 하나도 빠짐없이 처리하는 멀티태스킹 엔진입니다.
+    [V12.16] AI 답변 속에 숨겨진 명령 태그와 '오답 원문'을 결합하여 처리합니다.
     """
     # 1. 오답 노트 학습 태그 (다중 처리 지원)
     learn_matches = list(re.finditer(r'\[\[LEARN\]\](.*?)\[\[/LEARN\]\]', ai_reply, re.DOTALL))
@@ -556,9 +556,10 @@ async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.
         from feedback_manager import add_correction
         for match in learn_matches:
             rule_text = match.group(1).strip()
-            add_correction(rule_text)
+            # [V12.16] 이제 '오답 원문(replied_text)'을 함께 넘겨서 세트로 박제합니다!
+            add_correction(rule_text, replied_text)
         ai_reply = re.sub(r'\[\[LEARN\]\].*?\[\[/LEARN\]\]', '', ai_reply, flags=re.DOTALL).strip()
-        ai_reply += f"\n\n*(✅ 비서가 방금 지적하신 {len(learn_matches)}건의 내용을 오답 노트에 기록하여 학습했습니다!)*"
+        ai_reply += f"\n\n*(✅ 비서가 방금 지적하신 {len(learn_matches)}건의 내용을 [오답 사례 세트]로 학습했습니다!)*"
 
     # 2. 메모(수첩) 저장 태그 (다중 처리 지원)
     memo_matches = list(re.finditer(r'\[\[SAVE_MEMO\]\](.*?)\[\[/SAVE_MEMO\]\]', ai_reply, re.DOTALL))
@@ -694,8 +695,8 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         from ai_processor import chat_with_secretary
         ai_reply = await asyncio.to_thread(chat_with_secretary, user_text, replied_text)
         
-        # 3. [V11.5 핵심 혁신] AI 답변 내의 명령 태그들을 일괄 처리하고 청소합니다.
-        ai_reply = await _process_ai_tags(ai_reply, update, context)
+        # 3. [V12.16] AI 답변 내의 명령 태그들을 처리할 때 '오답 맥락(replied_text)'을 함께 태웁니다.
+        ai_reply = await _process_ai_tags(ai_reply, update, context, replied_text)
 
         # 4. 피아니의 답변 기록
         try:

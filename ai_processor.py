@@ -151,8 +151,22 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
 
         corrections = load_corrections()
         if corrections:
-            corr_text = "\n".join([f"- {c}" for c in corrections])
-            dynamic_prompt += f"\n\n[교정 오답 노트]\n최우선 산출 기준:\n{corr_text}"
+            # [V12.16] AI 최적화 오답 복기 세트 구성 (대괄호와 해시태그 활용)
+            corr_text = ""
+            for i, c in enumerate(corrections, 1):
+                if isinstance(c, dict):
+                    corr_text += (
+                        f"\n#### [과거 실수 복기 사례 #{i}]\n"
+                        f"- [당시 오답]: {c.get('mistake', '알 수 없음')}\n"
+                        f"- [부장님 지적]: {c.get('correction', '지시사항 준수 요청')}\n"
+                        f"- [반성 및 신규 규칙]: {c.get('lesson', '규칙 미지정')}\n"
+                        f"####"
+                    )
+                else:
+                    # 기존 고전 데이터(문자열) 대응
+                    corr_text += f"\n- {c}"
+            
+            dynamic_prompt += f"\n\n[📢 최우선 오답 노트 복기 지침]\n다음은 네가 과거에 실수하여 부장님께 혼났던 사례들이다. 이번 요약 시 절대 같은 실수를 반복하지 마라:\n{corr_text}"
     except Exception: pass
 
     # 시간 감각 주입

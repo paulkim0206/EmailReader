@@ -167,6 +167,8 @@ async def background_mail_checker(application: Application):
                             await send_email_alert(application, retry_mail, ai_result, t_data, thread_key)
                             save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'), retry_mail.get('uid'))
                             remove_from_retry_queue(retry_uid)
+                            # [V12.15] 재시도 성공 시 명시적으로 처리 완료 기록
+                            save_processed_uid(retry_mail.get('uid'))
                             logger.info(f"장부 저장 성공 (UID: {retry_mail.get('uid')})")
                         else:
                             # [V12.8] 지능형 항복: 마지막 기회 실패 시 부장님께 즉시 최종 보고합니다.
@@ -174,6 +176,8 @@ async def background_mail_checker(application: Application):
                             
                             await send_failure_alert(application, retry_mail)
                             remove_from_retry_queue(retry_uid)
+                            # [V12.15] 최종 실패 시에도 장부에 기록하여 무한 반복 방지
+                            save_processed_uid(retry_mail.get('uid'))
                     except Exception as re:
                         logger.error(f"재시도 처리 중 개별 오류 발생 (스킵하고 다음 진행): {re}")
                         continue
@@ -182,16 +186,11 @@ async def background_mail_checker(application: Application):
             logger.info("💓 메일함 확인 중... (Scanning for new emails)")
             unseen_emails = await asyncio.to_thread(fetch_unseen_emails)
             
-            # [V10.0] 서버 재시작 시 과거 메일 도배 방지 로직
+            # [V12.15] 서버 재시작 시 메일을 도배 방지 명목으로 무단 스킵하던 로직을 제거했습니다.
+            # 이제 시작 시점의 모든 읽지 않은 메일까지 꼼꼼히 챙깁니다.
             if is_first_run:
-                if unseen_emails:
-                    for mail_data in unseen_emails:
-                        save_processed_uid(mail_data['uid'])
-                    logger.info(f"서버 가동 전의 {len(unseen_emails)}통의 메일은 기록만 남기고 알림 없이 무시했습니다.")
                 is_first_run = False
-                logger.info("✅ 모든 시동 준비가 완료되었습니다. 이제부터 실시간 감시를 시작합니다.")
-                await asyncio.sleep(10)
-                continue
+                logger.info("✅ 모든 시동 준비가 완료되었습니다. 실시간 감시를 시작합니다!")
 
             # 새 메일 처리
             for mail_data in unseen_emails:
@@ -202,9 +201,12 @@ async def background_mail_checker(application: Application):
                     if ai_result.get('status') == '스킵':
                         logger.info(f"🙈 AI 판단: 학습 패턴에 의해 스킵 ({mail_data.get('subject')})")
                         await send_skip_alert(application, mail_data, ai_result)
+                        # 분석은 안 하지만, 스킵 판단이 섰으므로 처리 완료로 기록
+                        save_processed_uid(mail_data['uid'])
                     elif ai_result.get('is_ai_error'):
                         logger.warning(f"⚠️ AI 실패 → 지연 보고 및 대기열 등록: {mail_data.get('subject')}")
-                        # [V12.7 보강] 부장님이 답답하시지 않게 지연 보고를 즉시 드립니다.
+                        # 에러 시에는 장부(processed_uid)에 적지 않습니다! 
+                        # 그래야 나중에 다시 시도되거나 다음 서버 시작 때 누락되지 않습니다.
                         await send_email_alert(application, mail_data, ai_result, {}, mail_data.get('subject', ''))
                         add_to_retry_queue(mail_data)
                     else:
@@ -215,10 +217,9 @@ async def background_mail_checker(application: Application):
                         
                         await send_email_alert(application, mail_data, ai_result, t_data, thread_key)
                         save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'), mail_data.get('uid'))
+                        # 분석 성공 시에만 비로소 처리 완료로 서명!
+                        save_processed_uid(mail_data['uid'])
                         logger.info(f"장부 저장 성공 (UID: {mail_data.get('uid')})")
-                    
-                    # [V11.1] 모든 분석 과정이 '무사히' 끝나거나 대기열에 안전하게 들어갔을 때만 처리 완료 기록을 남깁니다.
-                    save_processed_uid(mail_data['uid'])
                 except Exception as me:
                     logger.error(f"메일 개별 처리 중 돌발 오류 (다음 메일로 넘어감): {me}")
                     continue

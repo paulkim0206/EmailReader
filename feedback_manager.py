@@ -88,20 +88,38 @@ def save_corrections(corr_list):
     except Exception as e:
         logger.error(f"오답 노트를 디스크에 적는데 실패했습니다: {e}")
 
-def add_correction(rule_text):
+def add_correction(rule_text, original_summary=None):
     """
-    텔레그램 답장을 통해 AI가 스스로 추출한 [학습 규칙] 하나를 추가합니다.
+    [V12.16] 상황 기반 오답 학습 체계 구축
+    텔레그램 답장을 통해 AI가 스스로 추출한 [학습 규칙]과 당시의 [오답 원문]을 한 세트로 저장합니다.
     """
+    import datetime
+    import pytz
+    from config import USER_TIMEZONE
+    
     if not rule_text:
         return False, "학습할 내용이 없습니다."
         
     current_list = load_corrections()
     
-    if rule_text in current_list:
-        return False, "이미 알고 있는 규칙입니다."
-        
-    current_list.append(rule_text)
+    # [V12.16] AI 최적화 구조로 데이터 포장
+    tz = pytz.timezone(USER_TIMEZONE)
+    new_case = {
+        "mistake": original_summary or "과거 데이터(상황 미기록)",
+        "correction": "부장님의 지시사항 및 피드백 기반",
+        "lesson": rule_text,
+        "recorded_at": datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+    }
+    
+    # 중복 체크 (규칙 내용 기준)
+    for existing in current_list:
+        if isinstance(existing, dict) and existing.get("lesson") == rule_text:
+            return False, "이미 알고 있는 규칙입니다."
+        elif isinstance(existing, str) and existing == rule_text:
+            return False, "이미 알고 있는 고전 규칙입니다."
+            
+    current_list.append(new_case)
     save_corrections(current_list)
     
-    logger.info(f"🧠 [오답 노트 저장 완료] 새로운 교정 규칙이 장부에 등록되었습니다: {rule_text}")
-    return True, "오답 노트 등록 완료!"
+    logger.info(f"🧠 [지능형 오답 노트 저장] 상황 기반 교정 규칙이 장부에 등록되었습니다: {rule_text}")
+    return True, "오답 노트 세트 등록 완료!"

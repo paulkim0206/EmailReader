@@ -7,7 +7,8 @@ import json
 import os
 import re
 from bs4 import BeautifulSoup
-from config import IMAP_SERVER, IMAP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD, logger, BASE_DIR, PROCESSED_UIDS_FILE
+from config import IMAP_SERVER, IMAP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD, logger, BASE_DIR, PROCESSED_UIDS_FILE, USER_TIMEZONE
+import pytz
 
 # 이미 처리된 메일 번호들을 안전하게 저장해둘 메모장(파일)의 경로입니다.
 UID_FILE = PROCESSED_UIDS_FILE
@@ -182,11 +183,15 @@ def fetch_unseen_emails():
         mail.select("inbox")
         logger.info("메일 서버 안전하게 접속 성공 완료!")
 
-        # 'UNSEEN' 즉, 우리가 평소 안 읽은 상태로 둔 이메일 상자만 정당하게 검색하되,
-        # 회사 그룹웨어 서버 특성에 맞춰 고유 번호(UID) 형식으로 바로 다이렉트 검색합니다.
-        status, response = mail.uid('SEARCH', 'UNSEEN')
+        # [핵심 수정] '읽지 않음(UNSEEN)'만 검색하면 부장님이 먼저 읽으신 메일을 놓칩니다.
+        # 따라서 날짜 기준(SINCE)으로 어제부터 온 모든 메일을 가져와 봇의 장부와 대조합니다.
+        tz = pytz.timezone(USER_TIMEZONE)
+        since_date = (datetime.datetime.now(tz) - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
+        
+        status, response = mail.uid('SEARCH', 'SINCE', since_date)
         if status != "OK":
-            logger.error("메일 검색에 실패하였습니다. 서버가 바쁠 수 있습니다.")
+            logger.error(f"메일 검색({since_date})에 실패하였습니다. 서버가 바쁠 수 있습니다.")
+            mail.logout()
             return []
 
         uids = response[0].split()
@@ -227,8 +232,8 @@ def fetch_unseen_emails():
                 "body": body
             })
             
-            logger.info(f"새로운 메일을 안전하게 읽어왔습니다: {subject}")
-
+        # [V12.15] 세션을 안전하게 닫고 반환합니다.
+        mail.logout()
         return fetched_emails
 
     except Exception as e:
