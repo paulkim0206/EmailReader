@@ -37,11 +37,15 @@ async def handle_scheduled_reports(application: Application):
                 if last_log.get("date") == today_str:
                     return
 
+        # [V12.14] 현지 시각 기준 '어제' 날짜를 명확히 계산하여 전달합니다.
+        yesterday_obj = now - datetime.timedelta(days=1)
+        yesterday_str = yesterday_obj.strftime("%Y-%m-%d")
+
         # [V11.8] 업무 분리: 월요일은 주간 통합, 나머지는 일일 업무 보고
         if now.weekday() == 0:
             await send_weekly_business_report(application)
         else:
-            await send_daily_business_report(application)
+            await send_daily_business_report(application, target_date=yesterday_str)
 
         # 장부에 기록 (보고 완료)
         os.makedirs(os.path.dirname(LAST_REPORT_LOG), exist_ok=True)
@@ -51,25 +55,8 @@ async def handle_scheduled_reports(application: Application):
     except Exception as e:
         logger.error(f"스케줄 보고서 트리거 중 오류: {e}")
 
-async def handle_cache_reset():
-    """
-    [V12.13] 부장님의 명을 받들어 매주 월요일, 목요일 새벽 3시에 
-    임시 저장소를 싹 청소하는 '대청소 엔진'입니다.
-    """
-    try:
-        tz = pytz.timezone(USER_TIMEZONE)
-        now = datetime.datetime.now(tz)
-        
-        # 새벽 3시(03:00) 정각 근처(1분 내)에만 작동합니다.
-        if now.hour == 3 and now.minute == 0:
-            # 월요일(0) 또는 목요일(3)인지 확인합니다.
-            if now.weekday() in [0, 3]:
-                logger.info(f"🧹 정기 대청소 시간입니다! (요일: {now.strftime('%A')})")
-                clear_temp_cache()
-                # 중복 청소 방지를 위해 살짝 대기
-                await asyncio.sleep(60) 
-    except Exception as e:
-        logger.error(f"정기 대청소 중 오류 발생: {e}")
+# [V12.14] 중복 로직 제거: 매일 새벽 3시 '자가 재시작'이 메모리를 초기화하므로 
+# 별도의 handle_cache_reset() 함수는 폐지되었습니다.
 
 async def send_daily_business_report(application: Application, target_date=None):
     """[V11.8] 고객사별 슬림 일일 보고서를 작성하여 전달합니다."""
@@ -156,8 +143,7 @@ async def background_mail_checker(application: Application):
     
     while True:
         try:
-            # [V12.13] 매분마다 대청소 시간인지 체크
-            await handle_cache_reset()
+            # [V12.14] 중복 대청소 로직 제거 (새벽 3시 자가 재시작으로 통합)
             
             # [V9.0] 매분마다 현재 시각을 체크하여 보고서 작업 수행
             await handle_scheduled_reports(application)

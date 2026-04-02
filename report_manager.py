@@ -1,7 +1,8 @@
 import os
 import json
 import datetime
-from config import REPORTS_DIR, logger
+import pytz
+from config import REPORTS_DIR, logger, USER_TIMEZONE
 
 def get_weekly_report_path(date_obj):
     """
@@ -32,21 +33,26 @@ def save_weekly_report(path, data):
 
 def update_daily_report(date_str=None):
     """
-    [V9.0] 특정 날짜(기본값: 어제)의 메일을 요약하여 주간 통합 장부에 기록합니다.
+    [V12.14] 현지 시각(USER_TIMEZONE) 기준으로 '어제' 날짜를 정확히 계산하여 
+    주간 통합 장부에 기록합니다. (서버 시각 불일치 해결)
     """
     if date_str is None:
-        # 어제 날짜 구하기 (오전 6시 보고용)
-        target_date_obj = datetime.date.today() - datetime.timedelta(days=1)
+        # [핵심 수정] 시스템 시계 대신 설정된 타임존 기준의 어제 날짜를 구합니다.
+        tz = pytz.timezone(USER_TIMEZONE)
+        today = datetime.datetime.now(tz).date()
+        target_date_obj = today - datetime.timedelta(days=1)
         date_str = target_date_obj.isoformat()
+        logger.info(f"📅 [자동 스케줄] 현지 시각 기준 어제({date_str}) 보고서 작성을 시작합니다.")
     else:
         target_date_obj = datetime.date.fromisoformat(date_str)
+        logger.info(f"🎯 [수동 요청] 지정된 날짜({date_str}) 보고서 작성을 시작합니다.")
 
     # 1. 원천 데이터(Thread Memory) 추출
     from thread_manager import get_summaries_all_by_date
     raw_summaries = get_summaries_all_by_date(date_str)
     
     if not raw_summaries:
-        logger.info(f"[{date_str}] 요약할 메일 데이터가 없습니다.")
+        logger.warning(f"⚠️ [{date_str}] 요약할 메일 데이터가 없습니다. (핀 버튼으로 선택된 메일이 있는지 확인해 주세요.)")
         return None
 
     # 2. AI 분석 (30자 주제별 요약)
@@ -71,15 +77,18 @@ def update_daily_report(date_str=None):
 
 def generate_weekly_summary():
     """
-    [V9.0] 이번 주(월~토) 일일 보고서들을 취합하여 주간 통합 리포트를 생성합니다.
+    [V12.14] 한 주의 흐름을 분석하며, 날짜 계산 시 현지 시각을 기준으로 합니다.
     """
-    # [V11.4] 월요일 아침에 실행되므로, '어제(일요일)' 기준의 주차 파일을 가져와야 지난주(월~토) 데이터가 잡힙니다.
-    reference_date = datetime.date.today() - datetime.timedelta(days=1)
+    # [핵심 수정] 현지 시각 기준으로 어제(일요일) 데이터를 참조하여 주차 파일을 결정합니다.
+    tz = pytz.timezone(USER_TIMEZONE)
+    today = datetime.datetime.now(tz).date()
+    reference_date = today - datetime.timedelta(days=1)
+    
     report_path = get_weekly_report_path(reference_date)
     weekly_data = load_weekly_report(report_path)
     
     if not weekly_data:
-        logger.warning("주간 보고서를 위한 일일 데이터가 하나도 없습니다.")
+        logger.warning(f"⚠️ 주간 보고서를 위한 데이터가 없습니다. (참조 파일: {os.path.basename(report_path)})")
         return None
 
     # 월~토요일 데이터만 필터링 (부장님 지침: 6일치만 담을 것)
