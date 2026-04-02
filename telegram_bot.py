@@ -172,12 +172,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     """
     query = update.callback_query
 
-    # 텔레그램 서버에 "주인님이 버튼 누르셨다! 화면에 모래시계 치워!" 라고 신호를 반환합니다.
-    # [V2.1] 클라우드 환경에서 응답이 늦어도 이후 처리가 중단되지 않도록 try/except로 방어합니다.
-    try:
-        await query.answer()
-    except Exception:
-        pass  # Timeout이 나도 아래 실제 처리 로직은 계속 진행합니다.
+    # 버튼 뒤에 숨겨두었던 암호문 (예: 'save_10번편지')을 가져옵니다.
 
     # 버튼 뒤에 숨겨두었던 암호문 (예: 'save_10번편지')을 가져옵니다.
     data = query.data
@@ -236,15 +231,17 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         if subject:
             success, msg = add_learning_preference(subject, summary or "데이터 없음")
             if success:
+                # [V12.16] 단 한 번만 응답!
+                await query.answer(text="✅ 앞으로 이 패턴의 메일은 스킵하겠습니다.")
                 await query.edit_message_reply_markup(reply_markup=None)
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
                     text=f"🧠 요약 제외 학습 완료!\n\n📝 등록된 제목 패턴: [{escape_for_tg(subject)}]\n\n앞으로 이와 비슷한 메일은 스킵하겠습니다. ✨"
                 )
             else:
-                await context.bot.send_message(chat_id=query.message.chat_id, text=f"ℹ️ 이미 학습된 패턴입니다.")
+                await query.answer(text="ℹ️ 이미 학습된 패턴입니다.")
         else:
-            await context.bot.send_message(chat_id=query.message.chat_id, text="⚠️ 정보를 찾을 수 없습니다.")
+            await query.answer(text="⚠️ 정보를 찾을 수 없습니다.")
         return
 
     # [새로운 분기 4] 부장님의 준엄한 명령: "그래도 요약해!"
@@ -271,6 +268,8 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             mail_data = await asyncio.to_thread(fetch_parsed_mail, uid)
 
         if mail_data:
+            # [V12.16] 재분석 시작됨을 알림
+            await query.answer(text="⏳ 재분석을 시작합니다...")
             from ai_processor import process_email_with_ai
             from thread_manager import format_threads_for_prompt
             history = format_threads_for_prompt()
@@ -285,6 +284,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             try: await query.edit_message_reply_markup(reply_markup=None)
             except Exception: pass
         else:
+            await query.answer(text="🚨 메일 데이터를 가져오지 못했습니다.")
             await context.bot.send_message(chat_id=query.message.chat_id, text="🚨 메일 서버에서 데이터를 가져오는 데 실패했습니다.")
         return
 
@@ -295,6 +295,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             location_keyboard = [[KeyboardButton("📍 현재 내 위치 전송 (GPS)", request_location=True)]]
             location_markup = ReplyKeyboardMarkup(location_keyboard, resize_keyboard=True, one_time_keyboard=True)
             
+            # [중요] query.answer는 여기서 단 한 번만 호출해야 충돌이 없습니다.
             await query.answer(text="📍 하단 키보드에 생성된 [위치 전송] 버튼을 눌러주세요!", show_alert=True)
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
@@ -319,6 +320,8 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             import pytz
             now = datetime.datetime.now(pytz.timezone(new_tz))
             
+            # 국가 선택 시에도 답변을 한 번만 호출
+            await query.answer(text="✅ 시계 설정이 완료되었습니다.")
             await query.edit_message_reply_markup(reply_markup=None)
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
