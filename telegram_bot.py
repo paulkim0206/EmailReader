@@ -627,13 +627,6 @@ async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.
                         summary_msg += f"- {escape_for_tg(item)}\n"
                     summary_msg += "\n"
             
-            achievements = report_data.get("key_achievements", [])
-            if achievements:
-                summary_msg += "🏆 <b>오늘의 핵심 성과:</b>\n"
-                for ach in achievements:
-                    summary_msg += f"- {escape_for_tg(ach)}\n"
-            
-            summary_msg += f"\n정해진 경로(`Email_Reports/` 및 `data/reports/`)에 안전하게 보관했습니다. 📋✨"
             await update.message.reply_text(summary_msg, parse_mode="HTML")
         else:
             await update.message.reply_text(f"⚠️ {target_date}의 데이터가 없어 보고서를 생성하지 못했습니다.")
@@ -657,12 +650,7 @@ async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.
                     summary_msg += f"- {escape_for_tg(item)}\n"
                 summary_msg += "\n"
             
-            next_steps = report_data.get("next_steps", [])
-            if next_steps:
-                summary_msg += "🏹 <b>차주 대응 제언:</b>\n"
-                for item in next_steps:
-                    summary_msg += f"- {escape_for_tg(item)}\n"
-            
+
             summary_msg += f"\n부장님의 전략적 의사결정을 돕기 위해 최선을 다해 분석했습니다. 수고하셨습니다! 👍"
             await update.message.reply_text(summary_msg, parse_mode="HTML")
         else:

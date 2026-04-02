@@ -91,13 +91,6 @@ async def send_daily_business_report(application: Application, target_date=None)
                         msg += f"- {escape_for_tg(item)}\n"
                     msg += "\n"
 
-            # 핵심 성과
-            achievements = daily_json.get("key_achievements", [])
-            if achievements:
-                msg += "🏆 <b>오늘의 핵심 성과:</b>\n"
-                for ach in achievements:
-                    msg += f"- {escape_for_tg(ach)}\n"
-            
             await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=msg, parse_mode="HTML")
             logger.info("일일 보고서 텔레그램 발송 완료")
     except Exception as e:
@@ -121,12 +114,7 @@ async def send_weekly_business_report(application: Application):
                     msg += f"- {escape_for_tg(item)}\n"
                 msg += "\n"
                 
-            next_steps = weekly_summary.get("next_steps", [])
-            if next_steps:
-                msg += "🏹 <b>차주 대응 제언:</b>\n"
-                for item in next_steps:
-                    msg += f"- {escape_for_tg(item)}\n"
-            
+
             msg += "\n실무가 시작되는 월요일입니다. 부장님, 이번 주도 건승하십시오! 👍"
             await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=msg, parse_mode="HTML")
             logger.info("주간 보고서 텔레그램 발송 완료")
