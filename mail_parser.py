@@ -1,5 +1,6 @@
 import imaplib
 import email
+import threading
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 import datetime
@@ -15,40 +16,43 @@ UID_FILE = PROCESSED_UIDS_FILE
 
 # [V12.13] 중복 체크 초고속화: 수만 개의 메일 번호도 0.0001초 만에 찾아내는 인메모리 세트 주머니입니다.
 _PROCESSED_UIDS_CACHE = None
+_UID_LOCK = threading.Lock() # [보안/QC] 장부 찢어짐 방지용 도어락 장착
 
 def load_processed_uids():
     global _PROCESSED_UIDS_CACHE
     
-    # 1. 이미 내 머릿속(메모리)에 번호들이 다 있다면 바로 반환합니다.
-    if _PROCESSED_UIDS_CACHE is not None:
-        return _PROCESSED_UIDS_CACHE
+    with _UID_LOCK: # [순서 정하기] 문 잠그고 입장
+        # 1. 이미 내 머릿속(메모리)에 번호들이 다 있다면 바로 반환합니다.
+        if _PROCESSED_UIDS_CACHE is not None:
+            return _PROCESSED_UIDS_CACHE
 
-    # 2. 처음 실행되었다면 파일(금고)에서 번호 목록을 꺼내옵니다.
-    if os.path.exists(UID_FILE):
-        try:
-            with open(UID_FILE, "r", encoding="utf-8") as f:
-                _PROCESSED_UIDS_CACHE = set(json.load(f))
-                return _PROCESSED_UIDS_CACHE
-        except Exception as e:
-            logger.error(f"메일 고유 번호 파일 읽기 오류: {e}")
-    
-    # 3. 금고가 비었다면 빈 주머니를 만듭니다.
-    _PROCESSED_UIDS_CACHE = set()
-    return _PROCESSED_UIDS_CACHE
+        # 2. 처음 실행되었다면 파일(금고)에서 번호 목록을 꺼내옵니다.
+        if os.path.exists(UID_FILE):
+            try:
+                with open(UID_FILE, "r", encoding="utf-8") as f:
+                    _PROCESSED_UIDS_CACHE = set(json.load(f))
+                    return _PROCESSED_UIDS_CACHE
+            except Exception as e:
+                logger.error(f"메일 고유 번호 파일 읽기 오류: {e}")
+        
+        # 3. 금고가 비었다면 빈 주머니를 만듭니다.
+        _PROCESSED_UIDS_CACHE = set()
+        return _PROCESSED_UIDS_CACHE
 
 def save_processed_uid(uid):
     global _PROCESSED_UIDS_CACHE
     
-    # 0. 메모리 주머니와 파일 금고 실시간 동기화
-    uids = load_processed_uids()
-    uids.add(str(uid)) # UID는 일관성 있게 문자열로 보관
-    
-    try:
-        with open(UID_FILE, "w", encoding="utf-8") as f:
-            json.dump(list(uids), f, ensure_ascii=False, indent=4)
-        logger.info(f"메일 고유 번호 장부 및 캐시 동기화 완료 (UID: {uid})")
-    except Exception as e:
-        logger.error(f"메일 고유 번호 저장 오류: {e}")
+    with _UID_LOCK: # [순서 정하기] 문 잠그고 입장
+        # 0. 메모리 주머니와 파일 금고 실시간 동기화
+        uids = load_processed_uids()
+        uids.add(str(uid)) # UID는 일관성 있게 문자열로 보관
+        
+        try:
+            with open(UID_FILE, "w", encoding="utf-8") as f:
+                json.dump(list(uids), f, ensure_ascii=False, indent=4)
+            logger.info(f"메일 고유 번호 장부 및 캐시 동기화 완료 (UID: {uid})")
+        except Exception as e:
+            logger.error(f"메일 고유 번호 저장 오류: {e}")
 
 def get_text_from_email(msg):
     """
@@ -172,73 +176,82 @@ def format_to_vietnam_time(raw_date_str):
 def fetch_unseen_emails():
     """
     메일 서버에 '암호화된 안전한 통로'로 접속하여 '읽지 않은 메일'만 조심스럽게 가져오는 메인 함수입니다.
-    이때 서버의 메일 상태를 멋대로 바꾸지 않도록 극도로 주의를 기울입니다. (보안 1원칙)
+    [V12.16] 끈기 강화: 잠깐의 통신 장애 시 즉시 3회 재시도를 수행합니다.
     """
-    logger.info("메일 서버 안전 접속 시도 (해킹 방지를 위한 SSL 암호화)...")
-    try:
-        # 이메일 서버와 안전하게 대화할 수 있는 전용 통신망(SSL)을 엽니다.
-        # [V1.12.1] 봇이 영원히 멈추는(프리징) 현상 방지를 위해 15초 타임아웃을 걸어둡니다.
-        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=15)
-        mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        mail.select("inbox")
-        logger.info("메일 서버 안전하게 접속 성공 완료!")
+    import time
+    max_retries = 3
+    retry_delay = 1 # 시작 대기 시간 (초)
+    
+    for attempt in range(1, max_retries + 1):
+        try:
+            logger.info(f"메일 서버 안전 접속 시도 ({attempt}/{max_retries})...")
+            # [V1.12.1] 봇이 영원히 멈추는(프리징) 현상 방지를 위해 15초 타임아웃을 걸어둡니다.
+            mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=15)
+            mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            mail.select("inbox")
+            logger.info("메일 서버 안전하게 접속 성공 완료!")
 
-        # [핵심 수정] '읽지 않음(UNSEEN)'만 검색하면 부장님이 먼저 읽으신 메일을 놓칩니다.
-        # 따라서 날짜 기준(SINCE)으로 어제부터 온 모든 메일을 가져와 봇의 장부와 대조합니다.
-        tz = pytz.timezone(USER_TIMEZONE)
-        since_date = (datetime.datetime.now(tz) - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
-        
-        status, response = mail.uid('SEARCH', 'SINCE', since_date)
-        if status != "OK":
-            logger.error(f"메일 검색({since_date})에 실패하였습니다. 서버가 바쁠 수 있습니다.")
-            mail.logout()
-            return []
-
-        uids = response[0].split()
-        processed_uids = load_processed_uids() # 컴퓨터가 두 번 일하는 걸 방지하기 위해 그동안 작업한 목록을 꺼냅니다.
-        fetched_emails = []
-
-        for uid_bytes in uids:
-            # 안전하게 뽑아낸 메일 고유 번호입니다.
-            uid = uid_bytes.decode('utf-8')
-
-            # 어제나 아까 이미 요약해 드린 메일이라면 스킵합니다. (중복 방어)
-            if uid in processed_uids:
-                continue
-
-            # 제일 중요한 부분입니다: (BODY.PEEK[]) 옵션을 써서 컴퓨터가 마음대로 
-            # 메일을 "읽음!" 으로 처리해버리는 대형 사고를 원천 차단합니다. 
-            # 그룹웨어 특성에 맞게 uid 명령어를 사용하여 서버와 직접 대화합니다.
-            status, msg_data = mail.uid('FETCH', uid, "(BODY.PEEK[])")
-            if status != "OK" or not msg_data or not msg_data[0] or not isinstance(msg_data[0], tuple):
-                continue
-
-            raw_email = msg_data[0][1]
-            if not isinstance(raw_email, bytes):
-                continue
-            msg = email.message_from_bytes(raw_email)
-
-            subject = decode_email_header(msg.get("Subject"))
-            sender = decode_email_header(msg.get("From"))
-            date = format_to_vietnam_time(msg.get("Date")) # 베트남 시간으로 강제 변환!
-            body = get_text_from_email(msg)
-
-            # 분석을 위해 예쁘게 한 바구니에 담아 놓습니다. (가위질 제거! 100% 원문만 보냅니다)
-            fetched_emails.append({
-                "uid": uid,
-                "subject": subject,
-                "sender": sender,
-                "date": date,
-                "body": body
-            })
+            # [핵심 수정] '읽지 않음(UNSEEN)'만 검색하면 부장님이 먼저 읽으신 메일을 놓칩니다.
+            # 따라서 날짜 기준(SINCE)으로 어제부터 온 모든 메일을 가져와 봇의 장부와 대조합니다.
+            tz = pytz.timezone(USER_TIMEZONE)
+            since_date = (datetime.datetime.now(tz) - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
             
-        # [V12.15] 세션을 안전하게 닫고 반환합니다.
-        mail.logout()
-        return fetched_emails
+            status, response = mail.uid('SEARCH', 'SINCE', since_date)
+            if status != "OK":
+                logger.error(f"메일 검색({since_date})에 실패하였습니다. 서버가 바쁠 수 있습니다.")
+                mail.logout()
+                return []
 
-    except Exception as e:
-        logger.error(f"메일 수신 중 돌발 상황이 발생했습니다: {e}")
-        return []
+            uids = response[0].split()
+            processed_uids = load_processed_uids() # 컴퓨터가 두 번 일하는 걸 방지하기 위해 그동안 작업한 목록을 꺼냅니다.
+            fetched_emails = []
+
+            for uid_bytes in uids:
+                # 안전하게 뽑아낸 메일 고유 번호입니다.
+                uid = uid_bytes.decode('utf-8')
+
+                # 어제나 아까 이미 요약해 드린 메일이라면 스킵합니다. (중복 방어)
+                if uid in processed_uids:
+                    continue
+
+                # 제일 중요한 부분입니다: (BODY.PEEK[]) 옵션을 써서 컴퓨터가 마음대로 
+                # 메일을 "읽음!" 으로 처리해버리는 대형 사고를 원천 차단합니다. 
+                # 그룹웨어 특성에 맞게 uid 명령어를 사용하여 서버와 직접 대화합니다.
+                status, msg_data = mail.uid('FETCH', uid, "(BODY.PEEK[])")
+                if status != "OK" or not msg_data or not msg_data[0] or not isinstance(msg_data[0], tuple):
+                    continue
+
+                raw_email = msg_data[0][1]
+                if not isinstance(raw_email, bytes):
+                    continue
+                msg = email.message_from_bytes(raw_email)
+
+                subject = decode_email_header(msg.get("Subject"))
+                sender = decode_email_header(msg.get("From"))
+                date = format_to_vietnam_time(msg.get("Date")) # 베트남 시간으로 강제 변환!
+                body = get_text_from_email(msg)
+
+                # 분석을 위해 예쁘게 한 바구니에 담아 놓습니다. (가위질 제거! 100% 원문만 보냅니다)
+                fetched_emails.append({
+                    "uid": uid,
+                    "subject": subject,
+                    "sender": sender,
+                    "date": date,
+                    "body": body
+                })
+                
+            # [V12.15] 세션을 안전하게 닫고 반환합니다.
+            mail.logout()
+            return fetched_emails
+
+        except Exception as e:
+            if attempt < max_retries:
+                logger.warning(f"메일 접속 장애 발생 ({attempt}/{max_retries}). {retry_delay}초 후 다시 시도합니다: {e}")
+                time.sleep(retry_delay)
+                retry_delay *= 2 # 지능형 대기: 기다리는 시간을 2배씩 늘려 서버 부하를 줄입니다.
+            else:
+                logger.error(f"최종 3회 접속 시도 모두 실패: {e}")
+                return []
 def fetch_raw_eml(uid):
     """
     [V12.8] 부장님의 리소스 절약 지침: 최종 실패 시에만 서버에서 원본 데이터를 가져옵니다.

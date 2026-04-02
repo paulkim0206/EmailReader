@@ -229,7 +229,7 @@ async def background_mail_checker(application: Application):
 
         except Exception as e:
             logger.error(f"메일 엔진 내부 오류 발생: {e}")
-            await asyncio.sleep(300) # 오류 시 5분 휴식
+            await asyncio.sleep(60) # [V12.16] 무조건 5분 휴식 폐지. 1분 뒤 다시 시도하여 민첩성 강화.
 
 async def main():
     """

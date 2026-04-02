@@ -1,6 +1,7 @@
 import json
 import os
 import datetime
+import threading
 from config import CHAT_HISTORY_FILE, logger
 
 # 처음 이 모듈이 불려올 때, 장기 기억 장부(JSON)가 없으면 즉시 신설합니다.
@@ -11,50 +12,55 @@ if not os.path.exists(CHAT_HISTORY_FILE):
 
 # [V12.13] 인메모리 싱글톤 캐시: 부장님과의 소중한 대화를 메모리(책상 위)에 올려두어 응답 속도를 1,000배 높입니다.
 _CHAT_LOGS_CACHE = None
+_CHAT_LOCK = threading.Lock() # [QC] 대화 기록용 문잠금 장치
 
 def _load_chat_logs():
     """
     [V12.13] 대화 기록을 메모리로 불러오는 내부 전용 헬퍼 함수입니다.
     """
     global _CHAT_LOGS_CACHE
-    if _CHAT_LOGS_CACHE is not None:
-        return _CHAT_LOGS_CACHE
-        
-    if os.path.exists(CHAT_HISTORY_FILE):
-        try:
-            with open(CHAT_HISTORY_FILE, 'r', encoding='utf-8') as f:
-                _CHAT_LOGS_CACHE = json.load(f)
-                return _CHAT_LOGS_CACHE
-        except Exception as e:
-            logger.error(f"대화 기록 파일 읽기 중 오류: {e}")
+    
+    with _CHAT_LOCK:
+        if _CHAT_LOGS_CACHE is not None:
+            return _CHAT_LOGS_CACHE
             
-    _CHAT_LOGS_CACHE = []
-    return _CHAT_LOGS_CACHE
+        if os.path.exists(CHAT_HISTORY_FILE):
+            try:
+                with open(CHAT_HISTORY_FILE, 'r', encoding='utf-8') as f:
+                    _CHAT_LOGS_CACHE = json.load(f)
+                    return _CHAT_LOGS_CACHE
+            except Exception as e:
+                logger.error(f"대화 기록 파일 읽기 중 오류: {e}")
+                
+        _CHAT_LOGS_CACHE = []
+        return _CHAT_LOGS_CACHE
 
 def save_chat_log(role: str, content: str):
     """
     부장님의 질문과 피아니의 답변을 메모리에 즉시 반영하고, 창고(SSD)에도 실시간 동기화합니다.
     """
     global _CHAT_LOGS_CACHE
-    try:
-        # 1. 메모리(캐시) 주머니 준비
-        logs = _load_chat_logs()
-        
-        # 2. 새로운 대화 한 마디 추가
-        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        new_entry = {
-            "timestamp": now_str,
-            "role": role,
-            "content": content
-        }
-        logs.append(new_entry)
-        
-        # 3. 메모리와 파일(창고) 실시간 동기화
-        with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
-            json.dump(logs, f, ensure_ascii=False, indent=2)
+    
+    with _CHAT_LOCK:
+        try:
+            # 1. 메모리(캐시) 주머니 준비
+            logs = _load_chat_logs()
             
-    except Exception as e:
-        logger.error(f"🚨 대화 기록부 동기화 중 오류 발생: {e}")
+            # 2. 새로운 대화 한 마디 추가
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            new_entry = {
+                "timestamp": now_str,
+                "role": role,
+                "content": content
+            }
+            logs.append(new_entry)
+            
+            # 3. 메모리와 파일(창고) 실시간 동기화
+            with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
+                json.dump(logs, f, ensure_ascii=False, indent=2)
+                
+        except Exception as e:
+            logger.error(f"🚨 대화 기록부 동기화 중 오류 발생: {e}")
 
 def get_recent_chat_context(limit: int = 20) -> str:
     """

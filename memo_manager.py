@@ -1,6 +1,7 @@
 import json
 import os
 import datetime
+import threading
 from config import USER_NOTES_FILE, logger
 
 os.makedirs(os.path.dirname(USER_NOTES_FILE), exist_ok=True)
@@ -10,31 +11,36 @@ if not os.path.exists(USER_NOTES_FILE):
 
 # [V12.13] 인메모리 싱글톤 캐시: 부장님의 수첩을 메모리에 상주시킵니다.
 _NOTES_CACHE = None
+_NOTES_LOCK = threading.Lock() # [QC] 수첩용 문잠금 장치
 
 def _load_notes():
     """수첩 내용을 메모리에서 즉시 꺼내거나, 처음이면 파일에서 읽어옵니다."""
     global _NOTES_CACHE
-    if _NOTES_CACHE is not None:
-        return _NOTES_CACHE
-        
-    try:
-        with open(USER_NOTES_FILE, 'r', encoding='utf-8') as f:
-            _NOTES_CACHE = json.load(f)
+    
+    with _NOTES_LOCK:
+        if _NOTES_CACHE is not None:
             return _NOTES_CACHE
-    except Exception as e:
-        logger.error(f"수첩 파일을 읽는데 실패했습니다: {e}")
-        _NOTES_CACHE = []
-        return _NOTES_CACHE
+            
+        try:
+            with open(USER_NOTES_FILE, 'r', encoding='utf-8') as f:
+                _NOTES_CACHE = json.load(f)
+                return _NOTES_CACHE
+        except Exception as e:
+            logger.error(f"수첩 파일을 읽는데 실패했습니다: {e}")
+            _NOTES_CACHE = []
+            return _NOTES_CACHE
 
 def _save_notes(notes):
     """수첩의 변경사항을 메모리에 반영하고 SSD에 실시간 동기화합니다."""
     global _NOTES_CACHE
-    _NOTES_CACHE = notes
-    try:
-        with open(USER_NOTES_FILE, 'w', encoding='utf-8') as f:
-            json.dump(notes, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.error(f"수첩 파일을 저장하는데 실패했습니다: {e}")
+    
+    with _NOTES_LOCK:
+        _NOTES_CACHE = notes
+        try:
+            with open(USER_NOTES_FILE, 'w', encoding='utf-8') as f:
+                json.dump(notes, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"수첩 파일을 저장하는데 실패했습니다: {e}")
 
 def save_memo(content: str) -> bool:
     try:

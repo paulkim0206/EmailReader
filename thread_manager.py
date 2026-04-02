@@ -1,6 +1,7 @@
 import json
 import os
 import datetime
+import threading
 from config import THREAD_CACHE_FILE, THREAD_MAX_SIZE, logger
 
 THREAD_HISTORY_LIMIT = 5      # 스레드당 최대 보관 요약 개수
@@ -8,46 +9,49 @@ THREAD_TIMEOUT_DAYS = 30      # 30일 이상 소식 없으면 방 삭제
 
 # [V12.13] 인메모리 싱글톤 캐시: 메모리에 장부를 딱 한 권만 펼쳐두어 하드디스크 부하를 90% 줄입니다.
 _THREADS_CACHE = None
+_THREAD_LOCK = threading.Lock() # [QC] 연속 대화 장부용 문잠금 장치
 
 def load_threads():
     global _THREADS_CACHE
     
-    # 1. 이미 메모리(책상 위)에 펼쳐져 있다면 바로 반환합니다. (초고속!)
-    if _THREADS_CACHE is not None:
-        return _THREADS_CACHE
+    with _THREAD_LOCK:
+        # 1. 이미 메모리(책상 위)에 펼쳐져 있다면 바로 반환합니다. (초고속!)
+        if _THREADS_CACHE is not None:
+            return _THREADS_CACHE
 
-    # 2. 처음 실행되었거나 메모리가 비었다면 파일(창고)에서 가져옵니다.
-    if os.path.exists(THREAD_CACHE_FILE):
-        try:
-            with open(THREAD_CACHE_FILE, "r", encoding="utf-8") as f:
-                _THREADS_CACHE = json.load(f)
-                return _THREADS_CACHE
-        except Exception as e:
-            logger.error(f"장부 파일 읽기 중 오류 발생: {e}")
-    
-    # 3. 파일도 없고 메모리도 처음이라면 빈 장부를 만듭니다.
-    _THREADS_CACHE = {}
-    return _THREADS_CACHE
+        # 2. 처음 실행되었거나 메모리가 비었다면 파일(창고)에서 가져옵니다.
+        if os.path.exists(THREAD_CACHE_FILE):
+            try:
+                with open(THREAD_CACHE_FILE, "r", encoding="utf-8") as f:
+                    _THREADS_CACHE = json.load(f)
+                    return _THREADS_CACHE
+            except Exception as e:
+                logger.error(f"장부 파일 읽기 중 오류 발생: {e}")
+        
+        # 3. 파일도 없고 메모리도 처음이라면 빈 장부를 만듭니다.
+        _THREADS_CACHE = {}
+        return _THREADS_CACHE
 
 def save_threads(threads):
     global _THREADS_CACHE
     
-    try:
-        # 0. 메모리(캐시) 업데이트
-        _THREADS_CACHE = threads
-        
-        # 1. 전체 주제 방이 너무 많아지면 가장 오래된 방부터 정리합니다.
-        if len(threads) > THREAD_MAX_SIZE:
-            sorted_keys = sorted(
-                threads.keys(),
-                key=lambda k: threads[k].get("last_date", ""),
-                reverse=True
-            )
-            threads = {k: threads[k] for k in sorted_keys[:THREAD_MAX_SIZE]}
-        with open(THREAD_CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump(threads, f, ensure_ascii=False, indent=4)
-    except Exception as e:
-        logger.error(f"장부 저장 실패: {e}")
+    with _THREAD_LOCK:
+        try:
+            # 0. 메모리(캐시) 업데이트
+            _THREADS_CACHE = threads
+            
+            # 1. 전체 주제 방이 너무 많아지면 가장 오래된 방부터 정리합니다.
+            if len(threads) > THREAD_MAX_SIZE:
+                sorted_keys = sorted(
+                    threads.keys(),
+                    key=lambda k: threads[k].get("last_date", ""),
+                    reverse=True
+                )
+                threads = {k: threads[k] for k in sorted_keys[:THREAD_MAX_SIZE]}
+            with open(THREAD_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(threads, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            logger.error(f"장부 저장 실패: {e}")
 
 def format_threads_for_prompt():
     """
