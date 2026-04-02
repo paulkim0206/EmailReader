@@ -297,6 +297,9 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             
             # [중요] query.answer는 여기서 단 한 번만 호출해야 충돌이 없습니다.
             await query.answer(text="📍 하단 키보드에 생성된 [위치 전송] 버튼을 눌러주세요!", show_alert=True)
+            # [V12.16] 버튼 클릭 후 즉시 상단 인라인 메뉴를 제거합니다.
+            await query.edit_message_reply_markup(reply_markup=None)
+            
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text="부장님, 방금 하단 타이핑 영역에 <b>[📍 위치 전송]</b> 버튼을 활성화했습니다. 해당 버튼을 누르시면 자동으로 분석을 시작합니다. 🫡",
