@@ -242,8 +242,8 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
 
     try:
         from chat_manager import get_recent_chat_history_raw
-        # [V12.16] 핵심!: 단순 텍스트가 아닌 '실제 대화 꾸러미'를 가져옵니다.
-        history_raw = get_recent_chat_history_raw(limit=15)
+        # [V12.16] 초강력 인지능력: 최근 14일간의 모든 대화 맥락을 순식간에 복원합니다.
+        history_raw = get_recent_chat_history_raw(days=14)
         
         # 제미나이의 '대화 흐름' 방식(user -> model)으로 데이터를 완벽히 변환합니다.
         contents = []

@@ -84,13 +84,35 @@ def get_recent_chat_context(limit: int = 20) -> str:
     except Exception as e:
         logger.error(f"🚨 대화 맥락 불러오기 실패: {e}")
         return ""
-def get_recent_chat_history_raw(limit: int = 20) -> list:
+def get_recent_chat_history_raw(days: int = 14, max_entries: int = 100) -> list:
     """
-    [V12.16] AI가 문맥을 '실제 대화 흐름'으로 인식할 수 있도록 원본 리스트를 반환합니다.
+    [V12.16] 최근 N일(기본 14일) 이내의 대화만 똑똑하게 골라냅니다.
+    아무리 대화가 많아도 최대 100개까지만 가져와서 토큰을 보호합니다.
     """
     try:
         logs = _load_chat_logs()
-        return logs[-limit:] if logs else []
+        if not logs: return []
+        
+        # 1. 14일 전 기점 계산
+        cutoff = datetime.datetime.now() - datetime.timedelta(days=days)
+        
+        # 2. 날짜 필터링 (장기 아카이브에서 2주일치만 쑥!)
+        recent_logs = []
+        for log in reversed(logs):
+            try:
+                log_time = datetime.datetime.strptime(log['timestamp'], "%Y-%m-%d %H:%M:%S")
+                if log_time >= cutoff:
+                    recent_logs.insert(0, log) # 역순으로 찾아내어 다시 정순으로 조립
+                else:
+                    # 14일보다 오래된 데이터가 나오면 중단 (시간 효율)
+                    break
+            except Exception: continue
+            
+            # 3. 개수 안전장치 (부장님의 지갑 보호)
+            if len(recent_logs) >= max_entries:
+                break
+                
+        return recent_logs
     except Exception as e:
-        logger.error(f"🚨 원본 대화 기록 불러오기 실패: {e}")
+        logger.error(f"🚨 14일 기억력 필터링 중 오류: {e}")
         return []
