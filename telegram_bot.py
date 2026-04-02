@@ -19,7 +19,6 @@ ALLOWED_CHAT_ID = str(TELEGRAM_CHAT_ID)
 # 이메일 데이터와 AI가 고생해서 분석한 요약을 컴퓨터 기억장치에 임시로 '잠시' 넣어두는 상자입니다.
 # 나중에 유저가 텔레그램 버튼으로 "이거 저장해줘!" 라고 할 때 여기서 꺼내다 씁니다.
 # (컴퓨터를 끄면 상자가 비워지는 임시 보관소라 용량 걱정은 전혀 없습니다.)
-# (컴퓨터를 끄면 상자가 비워지는 임시 보관소라 용량 걱정은 전혀 없습니다.)
 temp_mail_cache = {}
 
 def clear_temp_cache():
@@ -378,7 +377,7 @@ async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
     
     # [V12.16] 부장님을 위한 '하단 고정형 스마트 메뉴' 설계 및 장착
-    keyboard = [['❓ 도움말', '📝 메모현황', '🔄 업데이트']]
+    keyboard = [['❓ 도움말', '📝 메모보기', '🔄 업데이트']]
     # resize_keyboard=True 로 하면 버튼 크기가 화면에 맞게 아주 콤팩트하고 예쁘게 조절됩니다.
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
@@ -534,7 +533,22 @@ async def handle_update_command(update: Update, context: ContextTypes.DEFAULT_TY
         )
         
         if result.returncode == 0:
-            await update.message.reply_text(f"✅ 다운로드 완벽 성공!\n\n[처리 결과]\n{result.stdout}\n\n🤖 3초 뒤, 봇이 스스로 전원을 껐다 켜서(재부팅) 새로운 패치를 장착합니다. 잠시 후 뵙겠습니다!")
+            # [V12.16] 복잡한 파일 목록 대신, 현재의 짧은 버전 ID(Git Hash)만 추출하여 보고합니다.
+            rev_result = await asyncio.to_thread(
+                subprocess.run,
+                ['git', 'rev-parse', '--short', 'HEAD'],
+                capture_output=True,
+                text=True
+            )
+            short_id = rev_result.stdout.strip() if rev_result.returncode == 0 else "N/A"
+
+            await update.message.reply_text(
+                f"✅ <b>업데이트 성공!</b>\n"
+                f"최신 기능을 성공적으로 장착했습니다.\n\n"
+                f"📌 <b>버전 정보:</b> <code>{short_id}</code>\n"
+                f"🤖 3초 뒤, 피아니가 스스로 재부팅하여 새로운 패치를 적용합니다. 잠시 후 뵙겠습니다!",
+                parse_mode="HTML"
+            )
             # 2. 메세지를 무사히 보내고, 3초 뒤에 자기 자신을 파이썬 명령어로 100% 껐다 켭니다(Restart).
             await asyncio.sleep(3)
             # os.execl 은 현재 실행 중인 파이썬 프로세스를 '새 파이썬 프로세스'로 갈아 끼워버리는 완벽한 재부팅 기술입니다.
@@ -679,7 +693,7 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await handle_update_command(update, context)
         return
 
-    # [중요] '📝 메모현황' 버튼은 별도로 가로채지 않습니다. 
+    # [중요] '📝 메모보기' 버튼은 별도로 가로채지 않습니다. 
     # 부장님의 지시대로 피아니(AI)가 직접 뇌를 써서 미완료 업무만 브리핑하도록 대화 흐름을 유지합니다.
 
     # 1. 사용자 말씀 기록
