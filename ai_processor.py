@@ -241,9 +241,14 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
         chat_prompt += "\n\n" + _read_prompt_file("reply_mission.txt").format(replied_text=replied_text[:300])
 
     try:
-        from chat_manager import get_recent_chat_history_raw
-        # [V12.16] 초강력 인지능력: 최근 14일간의 모든 대화 맥락을 순식간에 복원합니다.
-        history_raw = get_recent_chat_history_raw(days=14)
+        # [V12.16] 전략적 필터링: GPS 분석 등 단순 작업 시에는 14일치 방대한 기억을 불러오지 않습니다. (과부하 방지)
+        history_raw = []
+        if include_history:
+            from chat_manager import get_recent_chat_history_raw
+            # 초강력 인지능력: 최근 14일간의 모든 대화 맥락을 순식간에 복원합니다.
+            history_raw = get_recent_chat_history_raw(days=14)
+        else:
+            logger.info("⚡ [초경량 인지] 14일 기억 복원을 건너뛰고 부장님의 명령에만 집중합니다.")
         
         # 제미나이의 '대화 흐름' 방식(user -> model)으로 데이터를 완벽히 변환합니다.
         contents = []

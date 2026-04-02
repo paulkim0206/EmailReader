@@ -354,7 +354,7 @@ async def handle_location_update(update: Update, context: ContextTypes.DEFAULT_T
             '{"country": "국가명", "timezone": "타임존이름"}'
         )
         
-        ai_response = await asyncio.to_thread(chat_with_secretary, prompt)
+        ai_response = await asyncio.to_thread(chat_with_secretary, prompt, None, False)
         
         # [V12.16] 긴급 방어: AI 응답이 없거나(None) 문자열이 아닐 경우를 대비합니다.
         if not ai_response or not isinstance(ai_response, str):
