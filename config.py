@@ -61,8 +61,9 @@ CHAT_HISTORY_FILE = os.path.join(DATA_DIR, "chat_history.json")
 RETRY_QUEUE_FILE = os.path.join(DATA_DIR, "retry_queue.json")
 RETRY_WAIT_MINUTES = 5  # AI 6회 실패 후 재시도까지 기다리는 시간 (분)
 
-# 메일 고유 번호 저장용 (중복 방지)
-PROCESSED_UIDS_FILE = os.path.join(DATA_DIR, "processed_uids.json")
+# [V12.16] 장부 속도 다이어트용 파일 경로 (JSON -> TXT로 이전)
+PROCESSED_UIDS_FILE = os.path.join(DATA_DIR, "processed_uids.txt")
+UID_FILE_JSON = os.path.join(DATA_DIR, "processed_uids.json") # [이사 전용] 기존 장고용 백업
 
 # AI 제미나이 맞춤형 진화용 '기피 메일 학습 노트' 경로 세팅
 USER_PREFERENCES_FILE = os.path.join(DATA_DIR, "user_preferences.json")

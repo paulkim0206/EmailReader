@@ -8,7 +8,7 @@ import json
 import os
 import re
 from bs4 import BeautifulSoup
-from config import IMAP_SERVER, IMAP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD, logger, BASE_DIR, PROCESSED_UIDS_FILE, USER_TIMEZONE
+from config import IMAP_SERVER, IMAP_PORT, EMAIL_ADDRESS, EMAIL_PASSWORD, logger, BASE_DIR, PROCESSED_UIDS_FILE, UID_FILE_JSON, USER_TIMEZONE
 import pytz
 
 # 이미 처리된 메일 번호들을 안전하게 저장해둘 메모장(파일)의 경로입니다.
@@ -18,6 +18,31 @@ UID_FILE = PROCESSED_UIDS_FILE
 _PROCESSED_UIDS_CACHE = None
 _UID_LOCK = threading.Lock() # [보안/QC] 장부 찢어짐 방지용 도어락 장착
 
+def _migrate_from_json():
+    """
+    [일회성 임시 이사반] 기존 JSON 장부를 새 TXT 장부로 안전하게 옮깁니다.
+    부장님의 소중한 데이터 유실을 0%로 만들기 위한 자동화 로직입니다.
+    """
+    if os.path.exists(PROCESSED_UIDS_FILE):
+        return # 이미 이사 완료됨
+        
+    if os.path.exists(UID_FILE_JSON):
+        try:
+            logger.info("🚚 [이사팀 출동] 기존 JSON 장부를 발견했습니다. 새 장부(.txt)로 이사를 시작합니다...")
+            with open(UID_FILE_JSON, "r", encoding="utf-8") as f:
+                old_data = json.load(f) # 기존 데이터를 리스트로 읽어옴
+            
+            # 새 장부(.txt) 개설 및 데이터 복사
+            with open(PROCESSED_UIDS_FILE, "w", encoding="utf-8") as f:
+                for uid in old_data:
+                    f.write(f"{uid}\n") # 한 줄에 하나씩 기록
+            
+            # 예전 장부 보관 (삭제하지 않고 .bak으로 개명)
+            os.rename(UID_FILE_JSON, UID_FILE_JSON + ".bak")
+            logger.info(f"✅ [이사 완료] {len(old_data)}개의 UID를 무사히 옮겼습니다. 예전 파일은 .bak로 보관했습니다.")
+        except Exception as e:
+            logger.error(f"🚨 [이사 실패] 이사 도중 문제가 생겼습니다: {e}")
+
 def load_processed_uids():
     global _PROCESSED_UIDS_CACHE
     
@@ -26,16 +51,20 @@ def load_processed_uids():
         if _PROCESSED_UIDS_CACHE is not None:
             return _PROCESSED_UIDS_CACHE
 
-        # 2. 처음 실행되었다면 파일(금고)에서 번호 목록을 꺼내옵니다.
-        if os.path.exists(UID_FILE):
+        # 2. [V12.16] 자동 이사 서비스 호출 (필요한 경우에만 1회 실행)
+        _migrate_from_json()
+
+        # 3. 처음 실행되었다면 파일(금고)에서 번호 목록을 꺼내옵니다.
+        if os.path.exists(PROCESSED_UIDS_FILE):
             try:
-                with open(UID_FILE, "r", encoding="utf-8") as f:
-                    _PROCESSED_UIDS_CACHE = set(json.load(f))
+                with open(PROCESSED_UIDS_FILE, "r", encoding="utf-8") as f:
+                    # [V12.16] 한 줄에 하나씩 적힌 텍스트를 읽어 세트(set) 주머니에 담습니다.
+                    _PROCESSED_UIDS_CACHE = set(f.read().splitlines())
                     return _PROCESSED_UIDS_CACHE
             except Exception as e:
                 logger.error(f"메일 고유 번호 파일 읽기 오류: {e}")
         
-        # 3. 금고가 비었다면 빈 주머니를 만듭니다.
+        # 4. 금고가 비었다면 빈 주머니를 만듭니다.
         _PROCESSED_UIDS_CACHE = set()
         return _PROCESSED_UIDS_CACHE
 
@@ -43,14 +72,20 @@ def save_processed_uid(uid):
     global _PROCESSED_UIDS_CACHE
     
     with _UID_LOCK: # [순서 정하기] 문 잠그고 입장
-        # 0. 메모리 주머니와 파일 금고 실시간 동기화
+        # 0. 메모리 주머니 업데이트
         uids = load_processed_uids()
-        uids.add(str(uid)) # UID는 일관성 있게 문자열로 보관
+        uid_str = str(uid)
+        
+        if uid_str in uids:
+            return # 이미 있다면 중복 기록 방지
+
+        uids.add(uid_str)
         
         try:
-            with open(UID_FILE, "w", encoding="utf-8") as f:
-                json.dump(list(uids), f, ensure_ascii=False, indent=4)
-            logger.info(f"메일 고유 번호 장부 및 캐시 동기화 완료 (UID: {uid})")
+            # [V12.16] 혁신: 파일 전체를 다시 쓰지 않고, 맨 뒤에 '한 줄만 추가(Append)'합니다.
+            with open(PROCESSED_UIDS_FILE, "a", encoding="utf-8") as f:
+                f.write(f"{uid_str}\n")
+            logger.info(f"메일 번호 고속 기록 완료 (UID: {uid_str})")
         except Exception as e:
             logger.error(f"메일 고유 번호 저장 오류: {e}")
 
