@@ -6,8 +6,8 @@ from config import USER_PREFERENCES_FILE, USER_CORRECTIONS_FILE, logger
 # [V12.13] 인메모리 싱글톤 캐시: AI의 학습 내용을 메모리에 상주시킵니다.
 _PREFERENCES_CACHE = None
 _CORRECTIONS_CACHE = None
-_PREF_LOCK = threading.Lock() # [QC] 학습 노트용 문잠금 장치
-_CORR_LOCK = threading.Lock() # [QC] 오답 노트용 문잠금 장치
+_PREF_LOCK = threading.RLock() # [QC] 학습 노트용 문잠금 장치
+_CORR_LOCK = threading.RLock() # [QC] 오답 노트용 문잠금 장치
 
 def load_preferences():
     """AI가 기피해야 할 [학습 노트]를 메모리에서 즉시 꺼내거나, 처음이면 파일에서 읽어옵니다."""

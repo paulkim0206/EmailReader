@@ -11,7 +11,7 @@ if not os.path.exists(USER_NOTES_FILE):
 
 # [V12.13] 인메모리 싱글톤 캐시: 부장님의 수첩을 메모리에 상주시킵니다.
 _NOTES_CACHE = None
-_NOTES_LOCK = threading.Lock() # [QC] 수첩용 문잠금 장치
+_NOTES_LOCK = threading.RLock() # [QC] 수첩용 문잠금 장치
 
 def _load_notes():
     """수첩 내용을 메모리에서 즉시 꺼내거나, 처음이면 파일에서 읽어옵니다."""

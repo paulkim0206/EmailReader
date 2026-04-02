@@ -9,7 +9,7 @@ THREAD_TIMEOUT_DAYS = 30      # 30일 이상 소식 없으면 방 삭제
 
 # [V12.13] 인메모리 싱글톤 캐시: 메모리에 장부를 딱 한 권만 펼쳐두어 하드디스크 부하를 90% 줄입니다.
 _THREADS_CACHE = None
-_THREAD_LOCK = threading.Lock() # [QC] 연속 대화 장부용 문잠금 장치
+_THREAD_LOCK = threading.RLock() # [QC] 연속 대화 장부용 문잠금 장치
 
 def load_threads():
     global _THREADS_CACHE

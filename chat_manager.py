@@ -12,7 +12,7 @@ if not os.path.exists(CHAT_HISTORY_FILE):
 
 # [V12.13] 인메모리 싱글톤 캐시: 부장님과의 소중한 대화를 메모리(책상 위)에 올려두어 응답 속도를 1,000배 높입니다.
 _CHAT_LOGS_CACHE = None
-_CHAT_LOCK = threading.Lock() # [QC] 대화 기록용 문잠금 장치
+_CHAT_LOCK = threading.RLock() # [QC] 대화 기록용 문잠금 장치
 
 def _load_chat_logs():
     """

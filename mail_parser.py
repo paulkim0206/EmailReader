@@ -16,7 +16,7 @@ UID_FILE = PROCESSED_UIDS_FILE
 
 # [V12.13] 중복 체크 초고속화: 수만 개의 메일 번호도 0.0001초 만에 찾아내는 인메모리 세트 주머니입니다.
 _PROCESSED_UIDS_CACHE = None
-_UID_LOCK = threading.Lock() # [보안/QC] 장부 찢어짐 방지용 도어락 장착
+_UID_LOCK = threading.RLock() # [V12.16] 재진입 가능 도어락(RLock)으로 교체하여 데드락(끼임 현상) 해결
 
 def _migrate_from_json():
     """

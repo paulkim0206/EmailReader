@@ -7,7 +7,7 @@ from config import RETRY_QUEUE_FILE, RETRY_WAIT_MINUTES, logger
 
 # [V12.13] 인메모리 싱글톤 캐시: 재시도 대기열을 메모리에 상주시킵니다.
 _QUEUE_CACHE = None
-_QUEUE_LOCK = threading.Lock() # [QC] 재시도 대기열용 문잠금 장치
+_QUEUE_LOCK = threading.RLock() # [QC] 재시도 대기열용 문잠금 장치
 
 def load_retry_queue():
     """대기열을 메모리에서 즉시 꺼내거나, 처음이면 파일에서 읽어옵니다."""
