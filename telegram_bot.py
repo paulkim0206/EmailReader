@@ -288,8 +288,23 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             await context.bot.send_message(chat_id=query.message.chat_id, text="🚨 메일 서버에서 데이터를 가져오는 데 실패했습니다.")
         return
 
-    # [V7.0 새로운 분기] 사용자가 시간대(tz_) 수동 버튼을 눌렀을 때!!
+    # [V7.0 새로운 분기] 사용자가 시간대(tz_) 관련 버튼을 눌렀을 때!!
     elif data.startswith("tz_"):
+        # [V12.16] GPS 시작 버튼 클릭 시: 하단 키보드에 위치 전송 버튼을 '띡!' 하고 띄워줍니다.
+        if data == "tz_gps_start":
+            location_keyboard = [[KeyboardButton("📍 현재 내 위치 전송 (GPS)", request_location=True)]]
+            location_markup = ReplyKeyboardMarkup(location_keyboard, resize_keyboard=True, one_time_keyboard=True)
+            
+            await query.answer(text="📍 하단 키보드에 생성된 [위치 전송] 버튼을 눌러주세요!", show_alert=True)
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="부장님, 방금 하단 타이핑 영역에 <b>[📍 위치 전송]</b> 버튼을 활성화했습니다. 해당 버튼을 누르시면 자동으로 분석을 시작합니다. 🫡",
+                parse_mode="HTML",
+                reply_markup=location_markup
+            )
+            return
+
+        # 일반적인 국가 수동 선택 처리
         new_tz = data.replace("tz_", "")
         
         # 1. 설정 파일에 저장
@@ -406,27 +421,24 @@ async def handle_time_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         
     msg = (
         f"⏰ <b>피아니 통합 시계 관리 시스템</b>\n\n"
-        f"현재 부장님의 시계는 <b>[{USER_TIMEZONE}]</b> 기준입니다.\n"
-        f"📅 <b>현지 시간:</b> {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-        f"아래 버튼을 눌러 피아니의 시계를 바꾸실 수 있습니다. 👇"
+        f"현재 부장님의 시계 기준: <b>[{USER_TIMEZONE}]</b>\n"
+        f"📅 <b>현지 시각:</b> {now.strftime('%A, %H:%M:%S')}\n\n"
+        f"원하시는 시간대를 선택하거나 GPS로 자동 맞춤을 시작하십시오. 👇"
     )
     
-    # 1. 수동 선택 (인라인 버튼)
+    # [V12.16] 부장님의 정석: 행 1(국가 선택), 행 2(GPS 자동 인식) 통합 배치
     inline_keyboard = [
         [
             InlineKeyboardButton("🇻🇳 베트남 (Ho Chi Minh)", callback_data="tz_Asia/Ho_Chi_Minh"),
             InlineKeyboardButton("🇰🇷 한국 (Seoul)", callback_data="tz_Asia/Seoul")
+        ],
+        [
+            InlineKeyboardButton("📍 GPS로 자동 시계 맞춤 시작", callback_data="tz_gps_start")
         ]
     ]
     inline_markup = InlineKeyboardMarkup(inline_keyboard)
     
-    # 2. 위치 자동 인식 (리플라이 키보드 - 위치 전송 요청)
-    # 한 번만 쓰고 사라지게(one_time_keyboard) 설정합니다.
-    location_keyboard = [[KeyboardButton("📍 현재 내 위치 전송 (GPS)", request_location=True)]]
-    location_markup = ReplyKeyboardMarkup(location_keyboard, resize_keyboard=True, one_time_keyboard=True)
-    
-    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=location_markup)
-    await update.message.reply_text("수동으로 선택하시려면 아래 버튼을 눌러주세요:", reply_markup=inline_markup)
+    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=inline_markup)
 
 async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
