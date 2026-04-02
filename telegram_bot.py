@@ -353,6 +353,12 @@ async def handle_location_update(update: Update, context: ContextTypes.DEFAULT_T
         
         ai_response = await asyncio.to_thread(chat_with_secretary, prompt)
         
+        # [V12.16] 긴급 방어: AI 응답이 없거나(None) 문자열이 아닐 경우를 대비합니다.
+        if not ai_response or not isinstance(ai_response, str):
+            logger.error(f"GPS 분석 실패: AI가 유효하지 않은 응답을 보냈습니다. (응답값: {ai_response})")
+            await update.message.reply_text("🚨 AI가 좌표를 해석하지 못했습니다. 잠시 후 다시 시도해 주세요.")
+            return
+
         # AI 결과 파싱
         import json as pyjson
         import re

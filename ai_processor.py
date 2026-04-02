@@ -264,7 +264,9 @@ def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
             contents=contents,
             config=types.GenerateContentConfig(system_instruction=chat_prompt)
         )
-        return response.text
+        
+        # [V12.16] AI 응답이 비어있거나(None) 차단되었을 때를 대비한 최종 방어선
+        return response.text or "🚨 앗, 부장님! 방금 머릿속에 안개가 낀 것처럼 답변이 떠오르지 않습니다. 다시 한번 말씀해 주시겠어요?"
         
     except Exception as e:
         logger.error(f"지능형 대화 엔진 오류: {e}")
