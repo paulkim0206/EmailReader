@@ -216,7 +216,7 @@ def _fallback_response():
         "summary": "⚠️ <b>[피아니 일시 지연]</b> AI 서버 응답 지연으로 실시간 분석을 중단했습니다. 5분 뒤 배경에서 마지막 1회 추가 요약 시도를 진행하겠습니다."
     }
 
-def chat_with_secretary(user_message: str, replied_text: str = None) -> str:
+def chat_with_secretary(user_message: str, replied_text: str = None, include_history: bool = True) -> str:
     """
     [V12.16] 초고성능 실시간 기억력 이식 (True Multi-turn API 적용)
     단순히 '장부'를 읽는 것이 아니라, 부장님과 방금 나눈 대화를 실제로 '기억'하게 합니다.
