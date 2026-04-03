@@ -93,11 +93,12 @@ def get_text_from_email(msg):
     """
     이메일 본문에서 컴퓨터가 넣은 겉모양(디자인)을 모두 벗겨내고
     오직 '순수한 글자'만 깔끔하게 뽑아내는 아주 중요한 함수입니다.
+    [V12.22] 껍데기 필터링 강화: "HTML로 보세요" 같은 안내문에 속지 않도록 개선되었습니다.
     """
     text_content = ""
     html_content = ""
 
-    # 메일이 텍스트, عکس, 첨부파일 등으로 쪼개진 혼합형인지 확인합니다.
+    # 메일이 텍스트, 그림, 첨부파일 등으로 쪼개진 혼합형인지 확인합니다.
     if msg.is_multipart():
         for part in msg.walk():
             content_type = part.get_content_type()
@@ -108,7 +109,6 @@ def get_text_from_email(msg):
                 try:
                     payload = part.get_payload(decode=True)
                     if payload:
-                        # 한글이 외계어로 깨지지 않게 예쁘게 풀어주는 번역 과정을 거칩니다.
                         decoded_text = decode_payload(payload, part.get_content_charset())
                         if content_type == "text/plain": # 순수한 글자 형태
                             text_content += decoded_text
@@ -129,28 +129,48 @@ def get_text_from_email(msg):
         except Exception as e:
             logger.error(f"메일 본문 해석 중 작은 문제 발생: {e}")
 
-    # [V12.4] 수술 결과: 표준적인 multipart 구조가 깨졌거나 본문을 못 찾았을 때를 대비한 '강제 해독' 로직 보강
-    if not text_content.strip() and not html_content.strip():
-        try:
-            # 이메일 라이브러리가 본문을 못 찾았을 때, 전체 데이터 덩어리를 하나로 보고 다시 시도합니다.
-            payload = msg.get_payload(decode=True)
-            if payload:
-                text_content = decode_payload(payload, msg.get_content_charset())
-        except Exception: pass
+    # [QC] 알맹이가 없는 '유령 안내문'인지 체크하는 내부 도구입니다.
+    def is_just_placeholder(txt):
+        if not txt: return True
+        txt = txt.strip().lower()
+        # 안내문의 전형적인 키워드들 (한글, 영어, 중국어 포함)
+        placeholders = [
+            "html 형식", "html viewer", "multi-part message", "mime format",
+            "html-compatible", "browser", "화면이 정상적으로 보이지", "본 메일은 html"
+        ]
+        # 글자 수가 너무 짧으면서(100자 이하) 위 키워드 중 하나라도 포함되어 있다면 유령 문구로 간주!
+        if len(txt) < 150:
+            for p in placeholders:
+                if p in txt: return True
+        return False
 
-    # 일반 텍스트가 있으면 그것을 최우선으로 사용합니다.
-    if text_content.strip():
-        return text_content.strip()
+    # 1. 일반 텍스트가 있지만, 그게 만약 '유령 안내문'이라면 과감히 버리고 HTML에 기대를 겁니다.
+    final_text = ""
+    if text_content.strip() and not is_just_placeholder(text_content):
+        final_text = text_content.strip()
     
-    # 일반 텍스트가 없고 HTML 글씨만 있다면, 불필요한 태그를 청소하여 글자만 추출합니다.
-    elif html_content.strip():
-        # BeautifulSoup 라이브러리 미설치 환경 대비 (순수 정규식으로 HTML 태그 싹둑 제거)
-        clean_text = re.sub(r'<[^>]+>', ' ', html_content)
-        # 과도한 공백 및 이스케이프 문자 정리
-        clean_text = re.sub(r'\s+', ' ', clean_text).replace('&nbsp;', ' ')
-        return clean_text.strip()
+    # 2. 텍스트가 없거나 유령 문구뿐이라면, HTML을 정성껏 뜯어서 내용을 보충합니다.
+    if not final_text and html_content.strip():
+        try:
+            # [V12.22] 정교한 수술: BeautifulSoup을 사용하여 스타일, 스크립트 등 불순물을 제거합니다.
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(html_content, 'lxml') # 또는 'html.parser'
+            
+            # 스타일과 스크립트 태그는 내용을 포함해서 아예 제거!
+            for script_or_style in soup(["script", "style"]):
+                script_or_style.decompose()
+
+            # 줄바꿈과 공백을 적절히 섞어서 깨끗한 글자만 추출합니다.
+            clean_text = soup.get_text(separator=' ', strip=True)
+            # 과도한 공백 및 이스케이프 문자 정리
+            final_text = re.sub(r'\s+', ' ', clean_text).replace('&nbsp;', ' ')
+        except Exception as e:
+            # 만약 수술 중 에러가 나면, 예비용 정규식(칼)을 사용하여 억지로라도 뜯어냅니다.
+            logger.warning(f"BeautifulSoup 고속 추출 실패로 정규식 대체: {e}")
+            clean_text = re.sub(r'<[^>]+>', ' ', html_content)
+            final_text = re.sub(r'\s+', ' ', clean_text).strip()
     
-    return "본문 추출 불가 메일"
+    return final_text if final_text.strip() else "본문 추출 불가 메일"
 
 def decode_payload(payload, charset):
     """
