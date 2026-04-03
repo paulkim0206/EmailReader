@@ -8,6 +8,7 @@ import pytz
 from google import genai
 from google.genai import types
 from config import GEMINI_API_KEY, PROMPTS_DIR, logger, AI_MODEL, USER_TIMEZONE
+from token_manager import log_token
 # --- [V11.8] 지능형 성능 최적화: 전역 클라이언트 싱글톤 ---
 _AI_CLIENT = None
 
@@ -197,9 +198,9 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
             response = client.models.generate_content(model=AI_MODEL, contents=final_text, config=req_config)
             result = json.loads(_clean_ai_json(response.text))
             
-            # 빈 요약 방지 로직 유지
-            if result.get('status') == '알림' and not result.get('summary', '').strip():
-                result['summary'] = "💡 [알림] 메인 본문이 너무 복합하거나 지연이 발생하여 요약을 구성하지 못했습니다. 원문을 직접 확인해 주십시오."
+            # [V12.25] 실시간 토큰 사용량 기록 (입력/출력)
+            if response.usage_metadata:
+                log_token("Mail_Summary", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
             
             # [V12.17] client_name이 누락되었을 경우를 대비한 기본값 설정
             if 'client_name' not in result:
@@ -241,6 +242,11 @@ def extract_skip_rule_ai(subject: str, body: str) -> str:
         if not client: return "분석 실패(API 오류)"
         
         response = client.models.generate_content(model=AI_MODEL, contents=prompt)
+        
+        # [V12.25] 토큰 기록
+        if response.usage_metadata:
+            log_token("Skip_Rule_Analysis", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
+            
         rule = response.text.strip() if response.text else "유형 파악 불가"
         return rule
     except Exception as e:
@@ -309,6 +315,10 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
             config=types.GenerateContentConfig(system_instruction=chat_prompt)
         )
         
+        # [V12.25] 토큰 기록
+        if response.usage_metadata:
+            log_token("Secretary_Chat", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
+            
         # [V12.16] AI 응답이 비어있거나(None) 차단되었을 때를 대비한 최종 방어선
         return response.text or "🚨 앗, 부장님! 방금 머릿속에 안개가 낀 것처럼 답변이 떠오르지 않습니다. 다시 한번 말씀해 주시겠어요?"
         
@@ -333,6 +343,11 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
             model=AI_MODEL, contents=data_text,
             config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         )
+        
+        # [V12.25] 토큰 기록
+        if response.usage_metadata:
+            log_token("Daily_Report", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
+            
         return json.loads(_clean_ai_json(response.text))
     except Exception:
         return {"topics": [{"category": "오류", "items": ["보고서 생성 실패"]}]}
@@ -356,6 +371,11 @@ def generate_weekly_summary_ai(daily_reports: dict) -> dict:
             model=AI_MODEL, contents=week_text,
             config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         )
+        
+        # [V12.25] 토큰 기록
+        if response.usage_metadata:
+            log_token("Weekly_Report", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
+            
         return json.loads(_clean_ai_json(response.text))
     except Exception as e:
         logger.error(f"주간 보고서 분석 중 오류: {e}")

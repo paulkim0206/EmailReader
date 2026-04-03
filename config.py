@@ -77,6 +77,9 @@ PROMPTS_DIR = os.path.join(BASE_DIR, "prompts")
 # [V9.0] 주 단위 통합 비즈니스 리포트 저장 폴더 세팅
 REPORTS_DIR = os.path.join(DATA_DIR, "reports")
 
+# [V12.25] AI 토큰 사용량 실시간 추적용 장부 경로 세팅
+TOKEN_USAGE_FILE = os.path.join(DATA_DIR, "token_usage.json")
+
 # 전역 로거(Logger) 설정 함수
 def setup_logger():
     # 로거 인스턴스 생성
