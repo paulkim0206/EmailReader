@@ -14,6 +14,7 @@ from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handl
 from thread_manager import format_threads_for_prompt, save_thread_entry, get_thread_msg_id
 from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue, update_retry_status
 from report_manager import update_daily_report, generate_weekly_summary
+import memo_manager # [V12.29] 서버 시작 시 즉시 메모 일괄 이사(청소)를 수행하기 위해 임포트
 
 # 중복 보고 방지를 위한 기록 파일 경로
 LAST_REPORT_LOG = os.path.join(BASE_DIR, "data", "last_report.json")

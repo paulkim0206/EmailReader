@@ -22,9 +22,6 @@ def _load_notes():
             return _NOTES_CACHE
             
         try:
-            # [V12.29] 서버가 켜질 때마다(재시작 시) 자동으로 완료된 메모를 백업으로 일괄 이사시킵니다.
-            _auto_archive_deleted_memos()
-            
             with open(USER_NOTES_FILE, 'r', encoding='utf-8') as f:
                 _NOTES_CACHE = json.load(f)
                 return _NOTES_CACHE
@@ -224,3 +221,7 @@ def get_backup_memos_text() -> str:
         return "\n".join(lines)
     except Exception as e:
         return f"🚨 백업 수첩 읽기 실패: {e}"
+
+# [V12.29] 부장님 지시: 서버가 시작(임포트)되는 즉시 '일괄 강제 이사 청소기'를 가동합니다.
+# 지연 실행 없이 즉각적인 장부 정리가 수행됩니다.
+_auto_archive_deleted_memos()
