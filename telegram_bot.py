@@ -555,6 +555,21 @@ async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"메모 기록 중 치명적인 에러 발생: {e}")
         await update.message.reply_text("🚨 앗! 하드디스크에 메모를 찍으려고 했는데 오류가 발생했습니다. 나중에 다시 시도해 주세요.")
+async def handle_restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V12.20] 사용자 요청에 의한 즉시 재부팅 명령어입니다.
+    업데이트(git pull) 없이 현재 프로세스만 새로고침합니다.
+    """
+    chat_id = str(update.message.chat_id)
+    if chat_id != ALLOWED_CHAT_ID:
+        return
+
+    await update.message.reply_text("🔄 <b>[시스템 재시작]</b> 부장님의 명령에 따라 피아니를 즉시 재부팅합니다. 3초만 기다려 주세요! 🫡", parse_mode="HTML")
+    
+    # [V12.20] 부장님이 직접 명령하신 것이므로 별도의 업데이트 없이 즉시 재부팅합니다.
+    await asyncio.sleep(3)
+    # os.execl 은 현재 실행 중인 파이썬 프로세스를 '새 파이썬 프로세스'로 갈아 끼워버리는 완벽한 재부팅 기술입니다.
+    os.execl(sys.executable, sys.executable, *sys.argv)
 
 async def handle_update_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -790,6 +805,7 @@ def setup_telegram_handlers(application: Application):
     application.add_handler(CommandHandler("status", command_status))
     application.add_handler(CommandHandler("note", handle_memo_command))
     application.add_handler(CommandHandler("update", handle_update_command))
+    application.add_handler(CommandHandler("restart", handle_restart_command))
     application.add_handler(CommandHandler("notelist", handle_export_notes))
     
     # [V7.0] 시간 시계 관리 명령어 (메뉴 호출)
