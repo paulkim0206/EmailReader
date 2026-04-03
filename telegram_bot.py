@@ -187,6 +187,11 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     # [새로운 분기 1] 부장님의 "이건 보고서에 넣어!" 명령 (핀 버튼)
     elif data.startswith("rpt_"):
         uid = data.split("_")[1]
+        
+        # [V12.20] 체감 속도 최적화: 클릭 즉시 버튼을 가려 부장님께 즉각적인 반응을 보여줍니다.
+        try: await query.edit_message_reply_markup(reply_markup=None)
+        except Exception: pass
+
         from thread_manager import find_entry_by_uid, mark_as_report_target
         
         # 1. 먼저 장부에서 정보를 찾습니다 (V12.12 핵심: 업데이트 후에도 작동!)
@@ -199,7 +204,6 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             if mark_as_report_target(thread_key, thread_index, status=True):
                 try:
                     await query.answer(text="✅ 해당 업무가 내일 아침 일일보고서 대상으로 등록되었습니다! 📋", show_alert=True)
-                    await query.edit_message_reply_markup(reply_markup=None)
                 except Exception: pass
             else:
                 await query.answer(text="❌ 장부 기록 중 문제가 생겼습니다. 나중에 다시 시도해 주세요.", show_alert=True)
@@ -210,6 +214,11 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     # [새로운 분기 3] 사용자가 AI 학습(👎) 단추를 눌렀을 때!!
     elif data.startswith("learn_"):
         uid = data.split("_")[1]
+
+        # [V12.20] 체감 속도 최적화: 클릭 즉시 버튼을 가려 부장님께 즉각적인 반응을 보여줍니다.
+        try: await query.edit_message_reply_markup(reply_markup=None)
+        except Exception: pass
+
         from thread_manager import find_entry_by_uid
         from feedback_manager import add_learning_preference
         from ai_processor import extract_skip_rule_ai
@@ -246,9 +255,6 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             
             success, msg = add_learning_preference(subject, summary or "요약 없음", reason)
             
-            # [V12.19] 작업 완료 후 버튼 즉시 제거 (실패/성공 상관없이)
-            await query.edit_message_reply_markup(reply_markup=None)
-
             if success:
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
