@@ -203,12 +203,16 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             
             if mark_as_report_target(thread_key, thread_index, status=True):
                 try:
-                    await query.answer(text="✅ 해당 업무가 내일 아침 일일보고서 대상으로 등록되었습니다! 📋", show_alert=True)
+                    # [V12.21] 부장님의 지시: 팝업(Alert) 대신 말풍선(Bubble)으로 응답합니다.
+                    await query.answer() # 버튼 클릭 음영 제거 (0.1초 반응)
+                    await query.message.reply_text("✅ 해당 업무가 내일 아침 일일보고서 대상으로 등록되었습니다! 📋", parse_mode="HTML")
                 except Exception: pass
             else:
-                await query.answer(text="❌ 장부 기록 중 문제가 생겼습니다. 나중에 다시 시도해 주세요.", show_alert=True)
+                await query.answer()
+                await query.message.reply_text("❌ 장부 기록 중 문제가 생겼습니다. 나중에 다시 시도해 주세요.", parse_mode="HTML")
         else:
-            await query.answer(text="⚠️ 너무 오래된 메일이거나 장부에서 찾을 수 없습니다. (30일 경과 등)", show_alert=True)
+            await query.answer()
+            await query.message.reply_text("⚠️ 너무 오래된 메일이거나 장부에서 찾을 수 없습니다. (30일 경과 등)", parse_mode="HTML")
         return
 
     # [새로운 분기 3] 사용자가 AI 학습(👎) 단추를 눌렀을 때!!
