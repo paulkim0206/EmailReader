@@ -501,24 +501,21 @@ async def handle_help_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         await update.message.reply_text("🚨 매뉴얼 파일을 찾을 수 없습니다.")
 
-async def handle_export_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_export_backup_notes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    [V4.2] 부장님의 명령('/수첩')에 의해 1번부터 끝번까지의 전체 메모 장부(JSON 파싱 텍스트)를 배달합니다.
+    [V12.29] 부장님의 명령('/notebackup')에 의해 백업된 전체 메모 장부를 배달합니다.
     데이터가 길 수 있으므로 깔끔하게 파일(Document) 형태로 전송합니다.
     """
     if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
     
-    from memo_manager import get_all_memos
-    from config import USER_NOTES_FILE
+    from memo_manager import get_backup_memos_text
     import tempfile
     
-    all_notes_text = get_all_memos()
+    backup_text = get_backup_memos_text()
     
-    # 텔레그램 한도 초과 방지 및 가독성을 위해 텍스트 파일로 뽑아서 발송합니다.
     try:
         with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.txt', encoding='utf-8') as tmp:
-            tmp.write("====== [부장님의 전체 공용 수첩(JSON) 다운로드 원본] ======\n\n")
-            tmp.write(all_notes_text)
+            tmp.write(backup_text)
             tmp_path = tmp.name
             
         with open(tmp_path, 'rb') as f:
@@ -526,12 +523,12 @@ async def handle_export_notes(update: Update, context: ContextTypes.DEFAULT_TYPE
                 chat_id=update.message.chat_id,
                 document=f,
                 filename=f"수첩_전체백업_{datetime.datetime.now().strftime('%Y%m%d')}.txt",
-                caption="🗄️ 부장님! [1번]부터 끝번까지 기록된 수첩 전체 원본(DB)을 배달해 드립니다!"
+                caption="🗄️ 부장님! 과거에 완료되어 백업 보관소로 이사 간 전체 메모 원본을 배달해 드립니다!"
             )
         import os
         os.unlink(tmp_path)
     except Exception as e:
-        await update.message.reply_text(f"🚨 수첩 파일 배달 중 오류: {e}")
+        await update.message.reply_text(f"🚨 백업 수첩 파일 배달 중 오류: {e}")
 
 async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -815,6 +812,8 @@ def setup_telegram_handlers(application: Application):
     # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note', '/update' 옵션을 박아 넣습니다.
     application.add_handler(CommandHandler("status", command_status))
     application.add_handler(CommandHandler("note", handle_memo_command))
+    application.add_handler(CommandHandler("notebackup", handle_export_backup_notes))
+    application.add_handler(CommandHandler("notelist", handle_export_backup_notes)) # [QC] 구형 명령어 호충 시에도 백업으로 연결 (친절한 비서)
     application.add_handler(CommandHandler("update", handle_update_command))
     application.add_handler(CommandHandler("restart", handle_restart_command))
     application.add_handler(CommandHandler("notelist", handle_export_notes))

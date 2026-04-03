@@ -55,6 +55,7 @@ THREAD_TIMEOUT_DAYS = 30   # 30일 이상 소식 없는 방은 자동 삭제
 
 # [V4.2] 공용 수첩(JSON) 및 대화 히스토리 파일 경로
 USER_NOTES_FILE = os.path.join(DATA_DIR, "user_notes.json")
+USER_NOTES_BACKUP_FILE = os.path.join(DATA_DIR, "user_notes_backup.json")
 CHAT_HISTORY_FILE = os.path.join(DATA_DIR, "chat_history.json")
 
 # AI 서버 장애 시 재시도 대기열 파일 경로 및 대기 시간 설정

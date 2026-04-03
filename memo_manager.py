@@ -2,7 +2,7 @@ import json
 import os
 import datetime
 import threading
-from config import USER_NOTES_FILE, logger
+from config import USER_NOTES_FILE, USER_NOTES_BACKUP_FILE, logger
 
 os.makedirs(os.path.dirname(USER_NOTES_FILE), exist_ok=True)
 if not os.path.exists(USER_NOTES_FILE):
@@ -22,6 +22,9 @@ def _load_notes():
             return _NOTES_CACHE
             
         try:
+            # [V12.29] 서버가 켜질 때마다(재시작 시) 자동으로 완료된 메모를 백업으로 일괄 이사시킵니다.
+            _auto_archive_deleted_memos()
+            
             with open(USER_NOTES_FILE, 'r', encoding='utf-8') as f:
                 _NOTES_CACHE = json.load(f)
                 return _NOTES_CACHE
@@ -41,6 +44,59 @@ def _save_notes(notes):
                 json.dump(notes, f, ensure_ascii=False, indent=2)
         except Exception as e:
             logger.error(f"수첩 파일을 저장하는데 실패했습니다: {e}")
+
+def _save_backup_note(note):
+    """[V12.28] 완료된 메모의 원본 전체를 별도의 백업 파일에 안전하게 보관합니다."""
+    try:
+        backup_data = []
+        if os.path.exists(USER_NOTES_BACKUP_FILE):
+            try:
+                with open(USER_NOTES_BACKUP_FILE, 'r', encoding='utf-8') as f:
+                    backup_data = json.load(f)
+            except Exception: pass
+        
+        # 중복 방지를 위해 이미 백업에 있는지 확인 (ID 기준)
+        if any(b.get('id') == note.get('id') for b in backup_data):
+            return
+            
+        backup_data.append(note)
+        with open(USER_NOTES_BACKUP_FILE, 'w', encoding='utf-8') as f:
+            json.dump(backup_data, f, ensure_ascii=False, indent=2)
+        logger.info(f"📁 메모 백업 성공 [ID:{note.get('id')}]")
+    except Exception as e:
+        logger.error(f"🚨 메모 백업 중 오류: {e}")
+
+def _auto_archive_deleted_memos():
+    """
+    [V12.29] 서버 재시작 시 실행되는 '일괄 강제 이사 청소기'입니다.
+    status가 'deleted'인 메모들을 백업 파일로 옮기고 원본 데이터에서는 내용을 비웁니다.
+    """
+    try:
+        if not os.path.exists(USER_NOTES_FILE): return
+        
+        with open(USER_NOTES_FILE, 'r', encoding='utf-8') as f:
+            notes = json.load(f)
+            
+        is_changed = False
+        for n in notes:
+            # 낮 시간 동안 'deleted'로 표시된 항목들을 찾습니다.
+            if n.get('status') == 'deleted':
+                # 1. 백업 파일로 원본 내용 복사
+                _save_backup_note(n)
+                
+                # 2. 원본에서는 내용을 비우고 'archived' 상태로 변경
+                n['content'] = "--- [완료됨/백업됨] ---"
+                n['status'] = 'archived'
+                n['timestamp'] = n['timestamp'] + " (이사완료)"
+                is_changed = True
+        
+        if is_changed:
+            with open(USER_NOTES_FILE, 'w', encoding='utf-8') as f:
+                json.dump(notes, f, ensure_ascii=False, indent=2)
+            logger.info("🧹 새벽(재시작) 일괄 강제 이사 청소를 완료했습니다!")
+            
+    except Exception as e:
+        logger.error(f"일괄 자동 이사 중 오류 발생: {e}")
 
 def save_memo(content: str) -> bool:
     try:
@@ -78,12 +134,12 @@ def get_recent_memos(limit: int = 10) -> str:
         return f"🚨 수첩 읽기 실패: {e}"
 
 def delete_memo(memo_id: int) -> bool:
-    """[V4.2 업데이트] 물리적 삭제 대신 '완료/삭제' 상태로 영구 보존(논리적 삭제)하여 고유번호(결번)를 지킵니다."""
+    """[V12.29] 부장님 지시: 낮 시간에는 '내용 유지'하며 'deleted' 상태로만 표시합니다."""
     try:
         notes = _load_notes()
         deleted = False
         for n in notes:
-            if n.get('id') == memo_id:
+            if n.get('id') == memo_id and n.get('status') == 'active':
                 n['status'] = 'deleted'
                 n['timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S (완료처리)")
                 deleted = True
@@ -93,7 +149,8 @@ def delete_memo(memo_id: int) -> bool:
             _save_notes(notes)
             return True
         return False
-    except Exception:
+    except Exception as e:
+        logger.error(f"메모 완료 처리 중 오류: {e}")
         return False
 
 def update_memo(memo_id: int, new_content: str) -> bool:
@@ -133,12 +190,37 @@ def get_active_memos_text() -> str:
         return f"🚨 미완료 수첩 읽기 실패: {e}"
 
 def get_all_memos() -> str:
-    """`/notelist` 명령어 발동 시, 전체 장부를 텍스트로 뽑아냅니다."""
+    """`/notelist` 명령어 발동 시, 현재 장부를 텍스트로 뽑아냅니다. (이사 완료된 항목은 내용 제외)"""
     notes = _load_notes()
     if not notes: return "수첩이 비어있습니다."
     
     lines = []
     for n in notes:
-        prefix = "✅ [완료/취소 선 쫙-긋기] " if n.get('status') == 'deleted' else ""
-        lines.append(f"[{n.get('id', '?')}번] {n['timestamp']}\n내용: {prefix}{n['content']}\n")
+        status = n.get('status')
+        if status == 'archived':
+            lines.append(f"[{n.get('id', '?')}번] (✅ 완료/백업됨)")
+        elif status == 'deleted':
+             lines.append(f"[{n.get('id', '?')}번] {n['timestamp']}\n내용: (✅ 임시 완료됨/이사대기) {n['content']}\n")
+        else:
+            lines.append(f"[{n.get('id', '?')}번] {n['timestamp']}\n내용: {n['content']}\n")
     return "\n".join(lines)
+
+def get_backup_memos_text() -> str:
+    """[V12.29] 백업 파일(user_notes_backup.json)에 격격된 전체 메모를 텍스트로 전환합니다."""
+    try:
+        if not os.path.exists(USER_NOTES_BACKUP_FILE):
+             return "(백업 파일이 아직 생성되지 않았습니다.)"
+             
+        with open(USER_NOTES_BACKUP_FILE, 'r', encoding='utf-8') as f:
+            backup_data = json.load(f)
+            
+        if not backup_data:
+            return "(백업된 메모가 하나도 없습니다.)"
+            
+        lines = ["====== [부장님의 백업 수첩 원본 보관소] ======\n"]
+        for n in backup_data:
+            lines.append(f"[{n.get('id', '?')}번] {n['timestamp']}\n내용: {n['content']}\n")
+            
+        return "\n".join(lines)
+    except Exception as e:
+        return f"🚨 백업 수첩 읽기 실패: {e}"
