@@ -279,7 +279,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             # 분석 완료 시 알림 및 장부 기록
             from thread_manager import save_thread_entry
             await send_email_alert(context.application, mail_data, new_ai_result, {}, mail_data.get('subject'))
-            save_thread_entry(new_ai_result.get('thread_key'), new_ai_result.get('thread_index'), new_ai_result.get('summary'), None, uid)
+            save_thread_entry(new_ai_result.get('thread_key'), new_ai_result.get('thread_index'), new_ai_result.get('summary'), None, uid, new_ai_result.get('client_name'))
             
             try: await query.edit_message_reply_markup(reply_markup=None)
             except Exception: pass

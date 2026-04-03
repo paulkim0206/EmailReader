@@ -14,6 +14,7 @@
     "skip_reason": "스킵 시 그 이유를 한 문장 작성 (알림일 경우 빈 문자열)",
     "is_thread": "true 또는 false (핑퐁 여부)",
     "thread_key": "연결된 주제명 또는 새 주제명 (간결하게)",
+    "client_name": "메일의 주인공인 핵심 외부 고객사(거래처)명 (예: FB Ketten, GB Power 등)",
     "thread_index": "이 메일이 해당 스레드의 몇 번째인지 (숫자)",
     "summary": "요약 내용 (status가 '스킵'이면 빈 문자열)"
 }

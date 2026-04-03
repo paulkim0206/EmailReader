@@ -165,7 +165,7 @@ async def background_mail_checker(application: Application):
                             t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
                             
                             await send_email_alert(application, retry_mail, ai_result, t_data, thread_key)
-                            save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'), retry_mail.get('uid'))
+                            save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'), retry_mail.get('uid'), ai_result.get('client_name'))
                             remove_from_retry_queue(retry_uid)
                             # [V12.15] 재시도 성공 시 명시적으로 처리 완료 기록
                             save_processed_uid(retry_mail.get('uid'))
@@ -216,7 +216,7 @@ async def background_mail_checker(application: Application):
                         t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
                         
                         await send_email_alert(application, mail_data, ai_result, t_data, thread_key)
-                        save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'), mail_data.get('uid'))
+                        save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'), mail_data.get('uid'), ai_result.get('client_name'))
                         # 분석 성공 시에만 비로소 처리 완료로 서명!
                         save_processed_uid(mail_data['uid'])
                         logger.info(f"장부 저장 성공 (UID: {mail_data.get('uid')})")

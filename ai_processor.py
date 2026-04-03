@@ -193,6 +193,10 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
             # 빈 요약 방지 로직 유지
             if result.get('status') == '알림' and not result.get('summary', '').strip():
                 result['summary'] = "💡 [알림] 메인 본문이 너무 복합하거나 지연이 발생하여 요약을 구성하지 못했습니다. 원문을 직접 확인해 주십시오."
+            
+            # [V12.17] client_name이 누락되었을 경우를 대비한 기본값 설정
+            if 'client_name' not in result:
+                result['client_name'] = "알 수 없음"
                 
             return result
 
@@ -283,7 +287,8 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
 
     # 일일 보고서 전용 지침으로 교체 (더 슬림하고 명확한 비즈니스 분석 수행)
     dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('daily_strategy')}"
-    data_text = "\n".join([f"제목: {i['subject']} | 요약: {i['summary']}" for i in raw_summaries])
+    # [V12.17] 장부에 저장된 진짜 고객사명(client)을 제공하여 AI의 오판을 방지합니다.
+    data_text = "\n".join([f"고객사: {i['client']} | 제목: {i['subject']} | 요약: {i['summary']}" for i in raw_summaries])
 
     try:
         client = _get_ai_client()

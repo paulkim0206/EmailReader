@@ -105,9 +105,10 @@ def format_threads_for_prompt():
 
     return "\n".join(lines)
 
-def save_thread_entry(thread_key, thread_index, summary, msg_id=None, uid=None):
+def save_thread_entry(thread_key, thread_index, summary, msg_id=None, uid=None, client_name=None):
     """
     [V12.12] 제미나이가 판단한 결과와 함께 메일 고유 번호(uid)를 장부에 저장합니다.
+    [V12.17] 부장님의 지시로 스레드 최상위에 '고객사명(client_name)' 칸을 신설합니다.
     """
     threads = load_threads()
     now_str = datetime.datetime.now().isoformat()
@@ -123,9 +124,14 @@ def save_thread_entry(thread_key, thread_index, summary, msg_id=None, uid=None):
     if thread_key not in threads:
         threads[thread_key] = {
             "msg_id": None,
+            "client_name": client_name, # ✅ 최초 생성 시 고객사명 기록
             "last_date": now_str,
             "summary_history": []
         }
+    else:
+        # [V12.17] 기존 스레드라도 AI가 더 정확한 고객사명을 가져오면 업데이트합니다.
+        if client_name and client_name != "알 수 없음":
+            threads[thread_key]["client_name"] = client_name
 
     threads[thread_key]["last_date"] = now_str
     if msg_id is not None:
@@ -174,11 +180,13 @@ def get_summaries_all_by_date(target_date: str) -> list:
     """
     [V9.0 리포트 전용] 장부(thread_memory.json)를 샅샅이 뒤져
     특정 날짜(YYYY-MM-DD)와 일치하는 모든 요약본을 수집하여 리스트로 반환합니다.
+    [V12.17] 반환 시 장부에 저장된 client_name 정보를 함께 태워 보냅니다.
     """
     threads = load_threads()
     results = []
     
     for thread_key, data in threads.items():
+        client_name = data.get("client_name", "알 수 없음")
         history = data.get("summary_history", [])
         for entry in history:
             if isinstance(entry, dict):
@@ -186,6 +194,7 @@ def get_summaries_all_by_date(target_date: str) -> list:
                 if entry.get("date") == target_date:
                     if entry.get("for_report", False): # 핀 버튼 누른 것만 필터링
                         results.append({
+                            "client": client_name, # ✅ 장부의 고객사명 전달
                             "subject": thread_key,
                             "summary": entry.get("summary", "")
                         })
