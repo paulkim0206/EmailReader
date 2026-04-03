@@ -8,7 +8,7 @@ from telegram.ext import Application
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, USER_TIMEZONE, REPORTS_DIR, BASE_DIR
 
 # 앞서 우리가 정성껏 만든 주요 도구들을 하나의 커다란 공장 상자로 불러옵니다!
-from mail_parser import fetch_unseen_emails, save_processed_uid
+from mail_parser import fetch_recent_emails, save_processed_uid
 from ai_processor import process_email_with_ai, load_all_prompts_to_memory
 from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, escape_for_tg, send_failure_alert, clear_temp_cache
 from thread_manager import format_threads_for_prompt, save_thread_entry, get_thread_msg_id
@@ -184,7 +184,7 @@ async def background_mail_checker(application: Application):
 
             # [V1.12.2] 새 메일 가져오기
             logger.info("💓 메일함 확인 중... (Scanning for new emails)")
-            unseen_emails = await asyncio.to_thread(fetch_unseen_emails)
+            unseen_emails = await asyncio.to_thread(fetch_recent_emails)
             
             # [V12.15] 서버 재시작 시 메일을 도배 방지 명목으로 무단 스킵하던 로직을 제거했습니다.
             # 이제 시작 시점의 모든 읽지 않은 메일까지 꼼꼼히 챙깁니다.

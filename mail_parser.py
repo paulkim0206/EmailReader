@@ -89,6 +89,33 @@ def save_processed_uid(uid):
         except Exception as e:
             logger.error(f"메일 고유 번호 저장 오류: {e}")
 
+def _repair_base64_payload(raw_txt):
+    """
+    [V12.24] 자가 치유 엔진의 핵심: 
+    본문에 숨겨진 Base64 블록을 찾아 강제로 해독하고, 말이 되는 내용이라면 원본을 대체합니다.
+    """
+    import base64
+    # 40자 이상의 공백 없는 영문/숫자/기호 블록을 찾습니다.
+    b64_pattern = re.compile(r'[A-Za-z0-9+/=]{40,}')
+    
+    def decode_and_verify(match):
+        blob = match.group(0)
+        try:
+            # 1. 암호 덩어리 사이의 미세한 공백/줄바꿈 제거
+            clean_blob = re.sub(r'\s+', '', blob)
+            # 2. 강제 해독 시도
+            decoded = base64.b64decode(clean_blob).decode('utf-8', errors='ignore')
+            
+            # 3. 해독된 내용이 전형적인 메일 단어를 포함하는지 '지능형 검증'
+            meaningful_keywords = ["dear", "hi", "good", "hope", "shipping", "invoice", "date", "regard", "thanks"]
+            if len(decoded) > 10 and any(word in decoded.lower() for word in meaningful_keywords):
+                return f"\n[해독 성공]\n{decoded}\n[/해독 완료]\n"
+        except Exception:
+            pass
+        return blob # 해독 실패 시 원본 유지
+        
+    return b64_pattern.sub(decode_and_verify, raw_txt)
+
 def get_text_from_email(msg):
     """
     이메일 본문에서 컴퓨터가 넣은 겉모양(디자인)을 모두 벗겨내고
@@ -116,18 +143,24 @@ def get_text_from_email(msg):
                             html_content += decoded_text
                 except Exception as e:
                     logger.error(f"메일 본문 해석 중 작은 문제 발생: {e}")
-    else:
-        # 이메일이 하나의 덩어리로 왔을 때의 처리입니다.
-        try:
-            payload = msg.get_payload(decode=True)
-            if payload:
-                decoded_text = decode_payload(payload, msg.get_content_charset())
-                if msg.get_content_type() == "text/plain":
-                    text_content = decoded_text
-                elif msg.get_content_type() == "text/html":
-                    html_content = decoded_text
-        except Exception as e:
-            logger.error(f"메일 본문 해석 중 작은 문제 발생: {e}")
+
+    # [V12.24] 고도화된 자가 치유 (심폐소생술 로직)
+    # 1. 메일 파서가 내용을 하나도 못 찾았거나(형식 파괴), 본문에 외계어(Content-Type 등)가 섞여 있을 때 작동합니다.
+    if not text_content.strip() and not html_content.strip():
+        logger.warning("🚑 [긴급] 메일 형식이 손상되어 수동 파싱(Scraping)을 시도합니다.")
+        raw_payload = msg.get_payload()
+        if isinstance(raw_payload, list):
+            # 조각조각 난 경우 다 합칩니다.
+            raw_text = "\n".join([str(p) for p in raw_payload])
+        else:
+            raw_text = str(raw_payload)
+        
+        # 외계어(Base64 블록)를 찾아 강제로 해독 시도
+        text_content = _repair_base64_payload(raw_text)
+        
+    # 만약 본문은 읽었지만 여전히 암호 덩어리(Base64)가 섞여 있다면 한 번 더 걸러줍니다.
+    if "RGVhci" in text_content or len(re.findall(r'[A-Za-z0-9+/=]{100,}', text_content)) > 0:
+        text_content = _repair_base64_payload(text_content)
 
     # [QC] 알맹이가 없는 '유령 안내문'인지 체크하는 내부 도구입니다.
     def is_just_placeholder(txt):
@@ -170,6 +203,9 @@ def get_text_from_email(msg):
             clean_text = re.sub(r'<[^>]+>', ' ', html_content)
             final_text = re.sub(r'\s+', ' ', clean_text).strip()
     
+    # 혹시 남아있을지도 모르는 원본 데이터 찌꺼기(--None 등) 정교하게 청소
+    final_text = re.sub(r'--\w+|Content-Type:.*|Content-Transfer-Encoding:.*', '', final_text)
+    
     return final_text if final_text.strip() else "본문 추출 불가 메일"
 
 def decode_payload(payload, charset):
@@ -187,6 +223,24 @@ def decode_payload(payload, charset):
                 continue
     # 모든 방식이 실패하면 억지로라도 표준 글자로 바꿉니다 (글자가 조금 깨질지언정 에러로 컴퓨터가 멈추지 않게 보호합니다).
     return payload.decode('utf-8', errors='replace')
+
+def _parse_email_message(msg, uid):
+    """
+    [V12.23] 모든 메일을 해석하는 공용 도구함입니다. 
+    메일 제목, 보낸 사람, 시간, 본문 추출 로직을 하나로 합쳤습니다.
+    """
+    subject = decode_email_header(msg.get("Subject"))
+    sender = decode_email_header(msg.get("From"))
+    date = format_to_vietnam_time(msg.get("Date"))
+    body = get_text_from_email(msg)
+    
+    return {
+        "uid": uid,
+        "subject": subject,
+        "sender": sender,
+        "date": date,
+        "body": body
+    }
 
 def decode_email_header(raw_header):
     """이메일 제목이나 보낸 사람이 특수 문자로 꼬여있을 때, 이를 사람이 읽을 수 있게 풀어주는 역할을 합니다."""
@@ -228,76 +282,63 @@ def format_to_vietnam_time(raw_date_str):
 
 
 
-def fetch_unseen_emails():
+def fetch_recent_emails():
     """
-    메일 서버에 '암호화된 안전한 통로'로 접속하여 '읽지 않은 메일'만 조심스럽게 가져오는 메인 함수입니다.
-    [V12.16] 끈기 강화: 잠깐의 통신 장애 시 즉시 3회 재시도를 수행합니다.
+    [V12.23] 부장님 지적 반영: 'UNSEEN'이 아닌 'SINCE' 날짜 기준으로 최근 메일을 가져옵니다.
+    메일 서버에 안전하게 접속하여 어제부터 오늘까지의 메일을 봇의 장부와 대조합니다.
     """
     import time
     max_retries = 3
-    retry_delay = 1 # 시작 대기 시간 (초)
+    retry_delay = 1
     
     for attempt in range(1, max_retries + 1):
         try:
             logger.info(f"메일 서버 안전 접속 시도 ({attempt}/{max_retries})...")
-            # [V1.12.1] 봇이 영원히 멈추는(프리징) 현상 방지를 위해 15초 타임아웃을 걸어둡니다.
-            mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=15)
-            mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            mail.select("inbox")
-            logger.info("메일 서버 안전하게 접속 성공 완료!")
+            # [V12.23] context manager(with)를 사용하여 접속 종료를 자동화합니다.
+            with imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=15) as mail:
+                mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+                mail.select("inbox")
+                logger.info("메일 서버 안전하게 접속 성공 완료!")
 
-            # [핵심 수정] '읽지 않음(UNSEEN)'만 검색하면 부장님이 먼저 읽으신 메일을 놓칩니다.
-            # 따라서 날짜 기준(SINCE)으로 어제부터 온 모든 메일을 가져와 봇의 장부와 대조합니다.
-            tz = pytz.timezone(USER_TIMEZONE)
-            since_date = (datetime.datetime.now(tz) - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
-            
-            status, response = mail.uid('SEARCH', 'SINCE', since_date)
-            if status != "OK":
-                logger.error(f"메일 검색({since_date})에 실패하였습니다. 서버가 바쁠 수 있습니다.")
-                mail.logout()
-                return []
-
-            uids = response[0].split()
-            processed_uids = load_processed_uids() # 컴퓨터가 두 번 일하는 걸 방지하기 위해 그동안 작업한 목록을 꺼냅니다.
-            fetched_emails = []
-
-            for uid_bytes in uids:
-                # 안전하게 뽑아낸 메일 고유 번호입니다.
-                uid = uid_bytes.decode('utf-8')
-
-                # 어제나 아까 이미 요약해 드린 메일이라면 스킵합니다. (중복 방어)
-                if uid in processed_uids:
-                    continue
-
-                # 제일 중요한 부분입니다: (BODY.PEEK[]) 옵션을 써서 컴퓨터가 마음대로 
-                # 메일을 "읽음!" 으로 처리해버리는 대형 사고를 원천 차단합니다. 
-                # 그룹웨어 특성에 맞게 uid 명령어를 사용하여 서버와 직접 대화합니다.
-                status, msg_data = mail.uid('FETCH', uid, "(BODY.PEEK[])")
-                if status != "OK" or not msg_data or not msg_data[0] or not isinstance(msg_data[0], tuple):
-                    continue
-
-                raw_email = msg_data[0][1]
-                if not isinstance(raw_email, bytes):
-                    continue
-                msg = email.message_from_bytes(raw_email)
-
-                subject = decode_email_header(msg.get("Subject"))
-                sender = decode_email_header(msg.get("From"))
-                date = format_to_vietnam_time(msg.get("Date")) # 베트남 시간으로 강제 변환!
-                body = get_text_from_email(msg)
-
-                # 분석을 위해 예쁘게 한 바구니에 담아 놓습니다. (가위질 제거! 100% 원문만 보냅니다)
-                fetched_emails.append({
-                    "uid": uid,
-                    "subject": subject,
-                    "sender": sender,
-                    "date": date,
-                    "body": body
-                })
+                # 날짜 기준(SINCE)으로 어제부터 온 모든 메일을 가져와 장부와 대조합니다.
+                tz = pytz.timezone(USER_TIMEZONE)
+                since_date = (datetime.datetime.now(tz) - datetime.timedelta(days=1)).strftime("%d-%b-%Y")
                 
-            # [V12.15] 세션을 안전하게 닫고 반환합니다.
-            mail.logout()
-            return fetched_emails
+                status, response = mail.uid('SEARCH', 'SINCE', since_date)
+                if status != "OK":
+                    logger.error(f"메일 검색({since_date})에 실패하였습니다.")
+                    return []
+
+                uids = response[0].split()
+                processed_uids = load_processed_uids() 
+                fetched_emails = []
+
+                for uid_bytes in uids:
+                    uid = uid_bytes.decode('utf-8')
+                    if uid in processed_uids:
+                        continue
+
+                    # PEEK 옵션으로 메일 읽음 처리 방지
+                    status, msg_data = mail.uid('FETCH', uid, "(BODY.PEEK[])")
+                    if status != "OK" or not msg_data or not msg_data[0] or not isinstance(msg_data[0], tuple):
+                        continue
+
+                    raw_email = msg_data[0][1]
+                    msg = email.message_from_bytes(raw_email)
+                    
+                    # [V12.23] 통합된 파싱 도구를 사용합니다.
+                    fetched_emails.append(_parse_email_message(msg, uid))
+                    
+                return fetched_emails
+
+        except Exception as e:
+            if attempt < max_retries:
+                logger.warning(f"메일 접속 장애 발생 ({attempt}/{max_retries}). {retry_delay}초 후 다시 시도: {e}")
+                time.sleep(retry_delay)
+                retry_delay *= 2
+            else:
+                logger.error(f"최종 3회 접속 시도 모두 실패: {e}")
+                return []
 
         except Exception as e:
             if attempt < max_retries:
@@ -334,38 +375,23 @@ def fetch_raw_eml(uid):
         return None
 def fetch_parsed_mail(uid):
     """
-    [V12.12] 특정 고유번호(uid)의 메일을 서버에서 즉각 가져와 파싱된 딕셔너리로 반환합니다.
-    캐시가 비었을 때 '강제 요약'을 수행하기 위한 실시간 복구 엔진입니다.
+    [V12.23] 통합 수술 결과: _parse_email_message를 사용하여 신속하게 특정 메일을 복구합니다.
     """
     logger.info(f"실시간 메일 데이터 복구 시작 (UID: {uid})...")
     try:
-        mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=15)
-        mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        mail.select("inbox")
-        
-        # PEEK 옵션으로 메일 상태를 건드리지 않고 데이터를 가져옵니다.
-        status, msg_data = mail.uid('FETCH', uid, "(BODY.PEEK[])")
-        mail.logout()
-        
-        if status == "OK" and msg_data and msg_data[0] and isinstance(msg_data[0], tuple):
-            raw_email = msg_data[0][1]
-            if isinstance(raw_email, bytes):
-                import email
+        with imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=15) as mail:
+            mail.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            mail.select("inbox")
+            status, msg_data = mail.uid('FETCH', uid, "(BODY.PEEK[])")
+            
+            if status == "OK" and msg_data and msg_data[0] and isinstance(msg_data[0], tuple):
+                raw_email = msg_data[0][1]
                 msg = email.message_from_bytes(raw_email)
                 
-                subject = decode_email_header(msg.get("Subject"))
-                sender = decode_email_header(msg.get("From"))
-                date = format_to_vietnam_time(msg.get("Date"))
-                body = get_text_from_email(msg)
-                
-                logger.info(f"성공: 메일 데이터 복구 완료 ({subject})")
-                return {
-                    "uid": uid,
-                    "subject": subject,
-                    "sender": sender,
-                    "date": date,
-                    "body": body
-                }
+                # [V12.23] 통합된 파싱 도구로 깔끔하게 반환!
+                result = _parse_email_message(msg, uid)
+                logger.info(f"성공: 메일 데이터 복구 완료 ({result['subject']})")
+                return result
         
         logger.error(f"실패: 서버에서 해당 메일 데이터를 찾지 못했습니다. (UID: {uid})")
         return None
