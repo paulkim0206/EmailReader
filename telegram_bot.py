@@ -203,14 +203,15 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             
             if mark_as_report_target(thread_key, thread_index, status=True):
                 try:
-                    # [V12.21] 부장님의 지시: 팝업(Alert) 대신 말풍선(Bubble)으로 응답합니다.
-                    await query.answer() # 버튼 클릭 음영 제거 (0.1초 반응)
-                    await query.message.reply_text("✅ 해당 업무가 내일 아침 일일보고서 대상으로 등록되었습니다! 📋", parse_mode="HTML")
+                    # [V12.23] 부장님 지시: 성공(✅)은 대화 흐름을 방해하지 않는 '토스트(자동 소멸)' 알림으로 응답합니다.
+                    await query.answer(text="✅ 일일보고서 대상으로 등록 완료! 📋", show_alert=False)
                 except Exception: pass
             else:
-                await query.answer()
+                # [QC] 오류(❌)는 부장님이 놓치지 않도록 말풍선으로 확실히 남깁니다!
+                await query.answer() 
                 await query.message.reply_text("❌ 장부 기록 중 문제가 생겼습니다. 나중에 다시 시도해 주세요.", parse_mode="HTML")
         else:
+            # [QC] 정보 부재(⚠️)도 부장님이 인지하셔야 하므로 말풍선으로 답장합니다!
             await query.answer()
             await query.message.reply_text("⚠️ 너무 오래된 메일이거나 장부에서 찾을 수 없습니다. (30일 경과 등)", parse_mode="HTML")
         return
