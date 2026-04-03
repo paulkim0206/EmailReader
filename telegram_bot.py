@@ -214,6 +214,9 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         from feedback_manager import add_learning_preference
         from ai_processor import extract_skip_rule_ai
         
+        # 0. [V12.19] 즉시 응답: 텔레그램 버튼의 '글썽임(로딩)'을 0.1초 만에 멈추게 합니다.
+        await query.answer(text="⏳ 부장님의 의도를 분석하여 학습 중입니다... 잠시만 기다려 주세요! 🫡")
+
         # 1. 장부 또는 캐시에서 제목, 본문, 요약을 확보합니다.
         info = find_entry_by_uid(uid)
         subject = None
@@ -242,9 +245,11 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             reason = await asyncio.to_thread(extract_skip_rule_ai, subject, body)
             
             success, msg = add_learning_preference(subject, summary or "요약 없음", reason)
+            
+            # [V12.19] 작업 완료 후 버튼 즉시 제거 (실패/성공 상관없이)
+            await query.edit_message_reply_markup(reply_markup=None)
+
             if success:
-                await query.answer(text="✅ 지능형 스킵 규칙 학습 완료!")
-                await query.edit_message_reply_markup(reply_markup=None)
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
                     text=(
@@ -255,9 +260,9 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
                     parse_mode="HTML"
                 )
             else:
-                await query.answer(text=f"ℹ️ {msg}")
+                await context.bot.send_message(chat_id=query.message.chat_id, text=f"ℹ️ {msg}")
         else:
-            await query.answer(text="⚠️ 정보를 찾을 수 없습니다.")
+            await context.bot.send_message(chat_id=query.message.chat_id, text="⚠️ 정보를 찾을 수 없습니다.")
         return
 
     # [새로운 분기 4] 부장님의 준엄한 명령: "그래도 요약해!"
