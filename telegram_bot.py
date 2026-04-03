@@ -212,34 +212,50 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         uid = data.split("_")[1]
         from thread_manager import find_entry_by_uid
         from feedback_manager import add_learning_preference
+        from ai_processor import extract_skip_rule_ai
         
-        # 1. 장부 또는 캐시에서 제목과 내용을 확보합니다.
+        # 1. 장부 또는 캐시에서 제목, 본문, 요약을 확보합니다.
         info = find_entry_by_uid(uid)
         subject = None
         summary = None
+        body = ""
         
+        cache_data = temp_mail_cache.get(uid)
+        if cache_data:
+            subject = cache_data["mail"].get("subject")
+            body = cache_data["mail"].get("body", "")
+            
         if info:
-            subject = info["thread_key"]
-            summary = info["summary"]
-        else:
-            # 장부에도 없으면(스킵된 메일 등) 캐시를 확인합니다.
-            cache_data = temp_mail_cache.get(uid)
-            if cache_data:
-                subject = cache_data["mail"].get("subject")
-                summary = "데이터 없음(스킵됨)"
+            subject = subject or info.get("thread_key")
+            summary = info.get("summary")
+        
+        if not body and uid:
+            # 캐시에 없으면 서버에서 가져옵니다 (V12.12 실시간 복구)
+            from mail_parser import fetch_parsed_mail
+            mail_data = await asyncio.to_thread(fetch_parsed_mail, uid)
+            if mail_data:
+                subject = subject or mail_data.get("subject")
+                body = mail_data.get("body", "")
 
         if subject:
-            success, msg = add_learning_preference(subject, summary or "데이터 없음")
+            # [V12.19] AI를 사용하여 왜 제외했는지 '의도(Rule)'를 추출합니다.
+            reason = await asyncio.to_thread(extract_skip_rule_ai, subject, body)
+            
+            success, msg = add_learning_preference(subject, summary or "요약 없음", reason)
             if success:
-                # [V12.16] 단 한 번만 응답!
-                await query.answer(text="✅ 앞으로 이 패턴의 메일은 스킵하겠습니다.")
+                await query.answer(text="✅ 지능형 스킵 규칙 학습 완료!")
                 await query.edit_message_reply_markup(reply_markup=None)
                 await context.bot.send_message(
                     chat_id=query.message.chat_id,
-                    text=f"🧠 요약 제외 학습 완료!\n\n📝 등록된 제목 패턴: [{escape_for_tg(subject)}]\n\n앞으로 이와 비슷한 메일은 스킵하겠습니다. ✨"
+                    text=(
+                        f"🧠 <b>요약 제외 및 규칙 학습 완료!</b>\n\n"
+                        f"📝 <b>파악된 스킵 규칙:</b>\n<code>{escape_for_tg(reason)}</code>\n\n"
+                        f"앞으로 유사한 성격의 메일은 지능적으로 스킵하겠습니다. ✨"
+                    ),
+                    parse_mode="HTML"
                 )
             else:
-                await query.answer(text="ℹ️ 이미 학습된 패턴입니다.")
+                await query.answer(text=f"ℹ️ {msg}")
         else:
             await query.answer(text="⚠️ 정보를 찾을 수 없습니다.")
         return

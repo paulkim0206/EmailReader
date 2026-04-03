@@ -144,8 +144,15 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
         if not force_summarize:
             preferences = load_preferences()
             if preferences:
-                pref_text = "\n".join([f"{i+1}. {p}" for i, p in enumerate(preferences)])
-                dynamic_prompt += f"\n\n[사용자 기피 학습 노트]\n'스킵' 분류 기준:\n{pref_text}"
+                pref_lines = []
+                for i, p in enumerate(preferences):
+                    if isinstance(p, dict):
+                        # [V12.19] 지능형 규칙 추출: 이유(reason)를 최우선으로 제공
+                        pref_lines.append(f"{i+1}. [유형/이유]: {p.get('reason')} (예시 제목: {p.get('subject')})")
+                    else:
+                        pref_lines.append(f"{i+1}. {p}")
+                pref_text = "\n".join(pref_lines)
+                dynamic_prompt += f"\n\n[사용자 기피 학습 노트]\n기본적으로 모든 메일을 상세히 요약하십시오. 단, 아래 제공되는 **[사용자 기피 학습 노트]**에 명시된 규칙이나 유형(유형/이유)에 해당하여 부장님이 명시적으로 요약을 원치 않는 경우에만 status를 '스킵'으로 분류하십시오. (단순 제목 일치뿐만 아니라 '성격'이 같으면 스킵하십시오.):\n{pref_text}"
         else:
             dynamic_prompt += "\n\n[특별 지침] 반드시 요약하십시오."
 
@@ -211,6 +218,34 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
 
     # 모든 시도(3회) 실패 시 최종 항복(1단계)
     return _fallback_response()
+
+def extract_skip_rule_ai(subject: str, body: str) -> str:
+    """
+    [V12.19] 사용자가 '요약 제외'를 누른 이유를 AI가 스스로 분석하여 
+    일반화된 '스킵 규칙(Rule)'을 한 문장으로 추출합니다.
+    """
+    if not subject and not body: return "내용 없음"
+    
+    prompt = (
+        f"너는 부장님의 취향을 완벽히 파악하는 수석 비서다.\n"
+        f"부장님이 아래 메일을 보시고 '요약할 필요 없다'며 제외(Skip)하셨다.\n"
+        f"이 메일의 제목과 내용을 보고, 부장님이 이 메일을 제외하신 '본성(유형)'을 분석해라.\n\n"
+        f"대상 메일:\n[제목]: {subject}\n[본문]: {body[:2000]}\n\n"
+        f"반드시 아래와 같이 '[유형] 이유' 형식의 한 문장으로만 결론을 내라.\n"
+        f"예: 🔴 [시스템 자동 회신] 특정 인물의 부재나 휴가 안내 등 업무 실체가 없는 자동 메일\n"
+        f"예: 📊 [단순 데이터 공유] 매일 반복되는 원자재 및 부품의 재고 현황 단순 리스트"
+    )
+    
+    try:
+        client = _get_ai_client()
+        if not client: return "분석 실패(API 오류)"
+        
+        response = client.models.generate_content(model=AI_MODEL, contents=prompt)
+        rule = response.text.strip() if response.text else "유형 파악 불가"
+        return rule
+    except Exception as e:
+        logger.error(f"스킵 규칙 추출 중 오류: {e}")
+        return "분석 중 오류 발생"
 
 def _fallback_response():
     """[V12.7] 실시간 시도가 모두 실패했을 때 부장님께 드리는 전문적인 보고"""

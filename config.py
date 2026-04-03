@@ -89,11 +89,13 @@ def setup_logger():
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
 
-        # 2. 파일 출력 시스템 (logs/app.log)
+        # 2. [V12.18] 날짜별 순환 다이어트 시스템 (Timed Rotating)
+        # 매일 자정(midnight)에 새 로그 시작, 최대 14일치 백업 보관
+        from logging.handlers import TimedRotatingFileHandler
         log_file_path = os.path.join(LOGS_DIR, "app.log")
-        file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+        file_handler = TimedRotatingFileHandler(log_file_path, when='midnight', interval=1, backupCount=14, encoding='utf-8')
         file_handler.setLevel(logging.INFO)
-
+        
         # 3. 로거 포맷 지정 (시간 - 로거명 - 로그레벨 - 메시지)
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         console_handler.setFormatter(formatter)
