@@ -816,7 +816,6 @@ def setup_telegram_handlers(application: Application):
     application.add_handler(CommandHandler("notelist", handle_export_backup_notes)) # [QC] 구형 명령어 호충 시에도 백업으로 연결 (친절한 비서)
     application.add_handler(CommandHandler("update", handle_update_command))
     application.add_handler(CommandHandler("restart", handle_restart_command))
-    application.add_handler(CommandHandler("notelist", handle_export_notes))
     
     # [V7.0] 시간 시계 관리 명령어 (메뉴 호출)
     application.add_handler(CommandHandler("time", handle_time_command))
