@@ -562,7 +562,7 @@ async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         
     except Exception as e:
         logger.error(f"메모 기록 중 치명적인 에러 발생: {e}")
-        await update.message.reply_text("🚨 앗! 하드디스크에 메모를 찍으려고 했는데 오류가 발생했습니다. 나중에 다시 시도해 주세요.")
+        await update.message.reply_text(f"🚨 앗! 하드디스크에 메모를 찍으려고 했는데 오류가 발생했습니다.\n[원인]: {e}")
 async def handle_restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     [V12.20] 사용자 요청에 의한 즉시 재부팅 명령어입니다.
@@ -790,7 +790,14 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
     try:
         # 2. AI 답변 생성
         from ai_processor import chat_with_secretary
-        ai_reply = await asyncio.to_thread(chat_with_secretary, user_text, replied_text)
+        
+        # [V12.30] 부장님의 날카로운 지적: 메모보기 시에는 과거 대화 기록(Hallucination 유발)을 배제합니다.
+        use_history = True
+        if user_text == "📝 메모보기":
+            use_history = False
+            logger.info("🚫 [메모 전용 브리핑] 과거 대화 맥락을 차단하고 장부 파일에만 집중합니다.")
+
+        ai_reply = await asyncio.to_thread(chat_with_secretary, user_text, replied_text, include_history=use_history)
         
         # 3. [V12.16] AI 답변 내의 명령 태그들을 처리할 때 '오답 맥락(replied_text)'을 함께 태웁니다.
         ai_reply = await _process_ai_tags(ai_reply, update, context, replied_text)

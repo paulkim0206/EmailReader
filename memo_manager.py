@@ -19,28 +19,39 @@ def _load_notes():
     
     with _NOTES_LOCK:
         if _NOTES_CACHE is not None:
-            return _NOTES_CACHE
+            # [V12.30] 원본 캐시를 직접 수정하지 못하게 복사본(copy)을 반환합니다.
+            return list(_NOTES_CACHE)
             
         try:
             with open(USER_NOTES_FILE, 'r', encoding='utf-8') as f:
                 _NOTES_CACHE = json.load(f)
-                return _NOTES_CACHE
+                return list(_NOTES_CACHE)
         except Exception as e:
             logger.error(f"수첩 파일을 읽는데 실패했습니다: {e}")
             _NOTES_CACHE = []
-            return _NOTES_CACHE
+            return []
+
 
 def _save_notes(notes):
     """수첩의 변경사항을 메모리에 반영하고 SSD에 실시간 동기화합니다."""
     global _NOTES_CACHE
     
     with _NOTES_LOCK:
-        _NOTES_CACHE = notes
         try:
+            # [V12.30] 부장님의 정밀 진단을 위해 절대 경로를 로그에 명시합니다.
+            abs_path = os.path.abspath(USER_NOTES_FILE)
+            
             with open(USER_NOTES_FILE, 'w', encoding='utf-8') as f:
                 json.dump(notes, f, ensure_ascii=False, indent=2)
+            
+            # [V12.30] 파일 저장에 성공했을 때만 메모리 캐시를 최신화합니다. (Sync Consistency)
+            _NOTES_CACHE = notes
+            logger.info(f"💾 수첩 파일 저장 완료: {abs_path}")
+            return True
         except Exception as e:
-            logger.error(f"수첩 파일을 저장하는데 실패했습니다: {e}")
+            logger.error(f"🚨 수첩 파일 저장 실패 ({USER_NOTES_FILE}): {e}")
+            return False
+
 
 def _save_backup_note(note):
     """[V12.28] 완료된 메모의 원본 전체를 별도의 백업 파일에 안전하게 보관합니다."""
@@ -106,9 +117,8 @@ def save_memo(content: str) -> bool:
         # 'status' 필드 추가: active(활성) / deleted(완료/삭제 처리됨)
         new_note = {"id": new_id, "timestamp": now_str, "content": content, "status": "active"}
         notes.append(new_note)
-        _save_notes(notes)
-        logger.info(f"✅ 메모 등록 성공 [ID:{new_id}]")
-        return True
+        # [V12.30] 실제 디스크 저장 성공 여부를 정직하게 반환합니다.
+        return _save_notes(notes)
     except Exception as e:
         logger.error(f"🚨 메모 등록 실패: {e}")
         return False
@@ -143,8 +153,7 @@ def delete_memo(memo_id: int) -> bool:
                 break
         
         if deleted:
-            _save_notes(notes)
-            return True
+            return _save_notes(notes)
         return False
     except Exception as e:
         logger.error(f"메모 완료 처리 중 오류: {e}")
@@ -164,8 +173,7 @@ def update_memo(memo_id: int, new_content: str) -> bool:
                 updated = True
                 break
         if updated:
-            _save_notes(notes)
-            return True
+            return _save_notes(notes)
         return False
     except Exception:
         return False
