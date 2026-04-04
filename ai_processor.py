@@ -261,10 +261,10 @@ def _fallback_response():
         "summary": "⚠️ <b>[피아니 일시 지연]</b> AI 서버 응답 지연으로 실시간 분석을 중단했습니다. 5분 뒤 배경에서 마지막 1회 추가 요약 시도를 진행하겠습니다."
     }
 
-def chat_with_secretary(user_message: str, replied_text: str = None, include_history: bool = True) -> str:
+def chat_with_secretary(user_message: str, replied_text: str = None, include_history: bool = True, include_memos: bool = False) -> str:
     """
     [V12.16] 초고성능 실시간 기억력 이식 (True Multi-turn API 적용)
-    단순히 '장부'를 읽는 것이 아니라, 부장님과 방금 나눈 대화를 실제로 '기억'하게 합니다.
+    [V12.31] 실속형 비서 체질 개선: 평소에는 수첩 내용을 숨겨서 인지 과부하를 방지합니다.
     """
     if not GEMINI_API_KEY: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
 
@@ -274,10 +274,12 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
     chat_prompt += f"\n\n{load_ability('secretary')}\n\n{_read_prompt_file('telegram_commands.txt')}"
     
     # 2. 고정 지식(수첩/시간) 주입
-    try:
-        from memo_manager import get_active_memos_text
-        chat_prompt += f"\n\n[부장님 수첩 현황]\n{get_active_memos_text()}"
-    except Exception: pass
+    if include_memos:
+        try:
+            from memo_manager import get_active_memos_text
+            chat_prompt += f"\n\n[부장님 수첩 현황]\n{get_active_memos_text()}"
+        except Exception: pass
+
 
     chat_prompt += _get_now_info()
 

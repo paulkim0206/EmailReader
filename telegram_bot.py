@@ -791,13 +791,28 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         # 2. AI 답변 생성
         from ai_processor import chat_with_secretary
         
-        # [V12.30] 부장님의 날카로운 지적: 메모보기 시에는 과거 대화 기록(Hallucination 유발)을 배제합니다.
+        # [V12.31] 실속형 비서: 메모와 관련된 대화일 때만 수첩을 노출하며, 인지 부하를 줄입니다.
+        use_memos = False
         use_history = True
+        
+        # 부장님이 메모 관련 말씀을 하실 때만 수첩을 꺼냅니다.
+        memo_keywords = ["메모", "수첩", "적어", "기록", "완료", "다했어", "처리", "지워", "수정", "변경"]
+        if any(kw in user_text for kw in memo_keywords) or user_text == "📝 메모보기":
+            use_memos = True
+            logger.info(f"📔 [수첩 지참] 메모 관련 키워드 감지 ('{user_text}'): 수첩을 함께 전달합니다.")
+            
         if user_text == "📝 메모보기":
             use_history = False
-            logger.info("🚫 [메모 전용 브리핑] 과거 대화 맥락을 차단하고 장부 파일에만 집중합니다.")
+            logger.info("🚫 [메모 전용 브리핑] 과거 대화 맥락을 차단하고 오직 장부 파일에만 집중합니다.")
 
-        ai_reply = await asyncio.to_thread(chat_with_secretary, user_text, replied_text, include_history=use_history)
+        ai_reply = await asyncio.to_thread(
+            chat_with_secretary, 
+            user_message=user_text, 
+            replied_text=replied_text, 
+            include_history=use_history,
+            include_memos=use_memos
+        )
+
         
         # 3. [V12.16] AI 답변 내의 명령 태그들을 처리할 때 '오답 맥락(replied_text)'을 함께 태웁니다.
         ai_reply = await _process_ai_tags(ai_reply, update, context, replied_text)
