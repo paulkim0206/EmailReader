@@ -96,9 +96,10 @@ def _get_now_info():
     try:
         tz = pytz.timezone(USER_TIMEZONE)
         now = datetime.datetime.now(tz)
-        return f"\n\n[SYSTEM_INTERNAL_TIME: {now.strftime('%Y-%m-%d %H:%M:%S')}]"
+        readable = now.strftime("오후 %I시 %M분" if now.hour >= 12 else "오전 %I시 %M분").replace(" 0", " ")
+        return f"\n\n[현재 시각: {readable} ({now.strftime('%Y-%m-%d')}). 이 정보는 참고용이며 이 형식 그대로 출력하지 마십시오.]"
     except Exception:
-        return f"\n\n[SYSTEM_INTERNAL_TIME: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]"
+        return f"\n\n[현재 시각 정보 없음]"
 
 def _clean_ai_json(text):
     """AI 응답에서 불필요한 마크다운 기호(```json 등)를 제거하고 순수 JSON만 추출"""
