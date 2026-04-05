@@ -23,9 +23,9 @@ def log_token(task, prompt_tokens, candidate_tokens):
             "date": now.strftime("%Y-%m-%d"),
             "time": now.strftime("%H:%M:%S"),
             "task": task,
-            "input_tokens": prompt_tokens,
-            "output_tokens": candidate_tokens,
-            "total_tokens": prompt_tokens + candidate_tokens
+            "input_tokens": prompt_tokens or 0,
+            "output_tokens": candidate_tokens or 0,
+            "total_tokens": (prompt_tokens or 0) + (candidate_tokens or 0)
         }
 
         with _TOKEN_LOCK:
