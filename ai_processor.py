@@ -382,9 +382,6 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
     elif intent == "REPORT_WORK":
         chat_prompt += f"\n\n{load_ability('report_trigger')}"
         
-    # 명령어 도우미는 항상 곁들입니다.
-    chat_prompt += f"\n\n{_read_prompt_file('telegram_commands.txt')}"
-    
     # 2. 고정 지식(수첩/시간) 주입
     if include_memos:
         try:

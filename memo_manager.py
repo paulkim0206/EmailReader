@@ -189,7 +189,7 @@ def get_active_memos_text() -> str:
             
         result = "[부장님의 미완료 수첩 목록]\n"
         for note in active_notes:
-            result += f"- {note.get('id', '?')}번: {note['content']} (등록: {note['timestamp']})\n"
+            result += f"- {note.get('id', '?')}번: {note['content']}\n"
         return result.strip()
     except Exception as e:
         return f"🚨 미완료 수첩 읽기 실패: {e}"
