@@ -126,8 +126,36 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
     [V11.2] retry_count에 따라 주력/백업 엔진을 지능적으로 선택합니다.
     """
     email_body = mail_data.get('body', '')
-    if not email_body or email_body == "본문 추출 불가 메일" or not GEMINI_API_KEY:
+    
+    if not GEMINI_API_KEY:
+        logger.error("AI 요약 건너뜀: API 키 없음")
         return _fallback_response()
+    
+    # [A+B안] 본문이 없는 메일(첨부파일 전용 등)은 AI 실패가 아닌 정상 케이스로 처리
+    if not email_body or email_body == "본문 추출 불가 메일":
+        subject = mail_data.get('subject', '제목 없음')
+        sender = mail_data.get('sender', '알 수 없음')
+        logger.info(f"본문 없는 메일 감지: '{subject}' (발신: {sender}) → 첨부파일 메일로 자동 분류")
+        # [B안] 스킵 규칙에 자동 등록 (중복 방지 내장)
+        try:
+            from feedback_manager import add_learning_preference
+            add_learning_preference(
+                subject=subject,
+                summary="본문 없이 첨부파일만 포함된 메일",
+                reason="[첨부파일 전용 메일] 본문 없이 파일만 첨부된 반복 메일 유형"
+            )
+        except Exception as e:
+            logger.warning(f"스킵 규칙 자동 등록 실패(무시): {e}")
+        # [A안] AI 없이 즉시 구조화된 응답 반환
+        return {
+            "status": "요약",
+            "is_ai_error": False,
+            "is_thread": False,
+            "thread_key": subject,
+            "thread_index": 1,
+            "client_name": sender,
+            "summary": f"<b>[첨부파일 메일]</b> 본문 없이 첨부파일만 수신됨."
+        }
 
     # [V12.11] 최정예 세이프가드: 기계어 패턴(500자)만 철저히 차단 (부장님의 정석 지참)
     # 띄어쓰기 한 칸 없이 500자 이상의 영문/숫자/기호가 이어지면 '기계어'로 판단하여 차단합니다.
