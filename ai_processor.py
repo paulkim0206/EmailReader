@@ -414,9 +414,8 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
             role = "user" if log['role'] == 'user' else "model"
             contents.append(types.Content(role=role, parts=[types.Part.from_text(text=log['content'])]))
         
-        # [검증] 만약 대화 기록이 없거나 구조가 이상하면 현재 메시지만이라도 보냅니다.
-        if not contents:
-            contents = [user_message]
+        # [치명적 버그 수정] 어떤 경우에도 부장님의 '현재 메시지'는 배열 맨 마지막에 추가되어야 합니다.
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_message)]))
 
         client = _get_ai_client()
         if not client: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
