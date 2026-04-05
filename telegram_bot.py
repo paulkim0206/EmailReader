@@ -824,9 +824,14 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if intent == "GENERAL_CHAT":
             try:
                 from chat_manager import save_chat_log
-                save_chat_log(role='user', content=user_text)
-                save_chat_log(role='assistant', content=ai_reply)
-                logger.info("✅ 순수 대화(GENERAL_CHAT)로 분류되어 장부에 영구 기록되었습니다.")
+                # [버그 방지] 오류 메시지는 장부에 기록하지 않음. 기록되면 봇이 오류 문구를 학습/반복하는 문제가 생김.
+                is_error_reply = ai_reply.startswith("🚨") or "안개가 낀 것처럼" in ai_reply or "머릿속에 기억들이 꼬여" in ai_reply or "머리가 좀 아파서" in ai_reply
+                if not is_error_reply:
+                    save_chat_log(role='user', content=user_text)
+                    save_chat_log(role='assistant', content=ai_reply)
+                    logger.info("✅ 순수 대화(GENERAL_CHAT)로 분류되어 장부에 영구 기록되었습니다.")
+                else:
+                    logger.warning("⚠️ 오류 메시지가 감지되어 장부 기록을 건너뜁니다. (오염 방지)")
             except Exception as e:
                 logger.error(f"장부 저장 실패: {e}")
         else:
@@ -839,14 +844,54 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"대화 처리 중 오류: {e}")
         await update.message.reply_text("🚨 앗, 부장님! 방금 머리가 좀 아파서 말씀을 제대로 못 들었습니다. 다시 말씀해 주시겠어요?")
 
+
+async def handle_memory_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V13.1] /memory : 대화 장부 현황 조회 + 초기화(삭제) 기능
+    """
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
+    from chat_manager import get_chat_status
+    status = get_chat_status()
+    msg = (
+        f"<b>대화 장부 현황</b>\n"
+        f"- 기록 건수: {status['count']}건\n"
+        f"- 파일 용량: {status['size_kb']} KB\n"
+        f"- 최근 기록: {status['last_time']}"
+    )
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("삭제 및 초기화", callback_data="memory_clear"),
+         InlineKeyboardButton("취소", callback_data="memory_cancel")]
+    ])
+    await update.message.reply_text(msg, parse_mode="HTML", reply_markup=keyboard)
+
+async def handle_memory_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V13.1] /memory 버튼 콜백 처리
+    """
+    query = update.callback_query
+    await query.answer()
+    if str(query.message.chat_id) != ALLOWED_CHAT_ID: return
+
+    if query.data == "memory_clear":
+        from chat_manager import clear_chat_history
+        success = clear_chat_history()
+        if success:
+            await query.edit_message_text("대화 장부 초기화 및 캐시 리로드 완료. (0건)")
+        else:
+            await query.edit_message_text("초기화 중 오류가 발생했습니다.")
+    elif query.data == "memory_cancel":
+        await query.edit_message_text("취소되었습니다.")
+
 def setup_telegram_handlers(application: Application):
     # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note', '/update' 옵션을 박아 넣습니다.
     application.add_handler(CommandHandler("status", command_status))
     application.add_handler(CommandHandler("note", handle_memo_command))
     application.add_handler(CommandHandler("notebackup", handle_export_backup_notes))
-    application.add_handler(CommandHandler("notelist", handle_export_backup_notes)) # [QC] 구형 명령어 호충 시에도 백업으로 연결 (친절한 비서)
+    application.add_handler(CommandHandler("notelist", handle_export_backup_notes))
     application.add_handler(CommandHandler("update", handle_update_command))
     application.add_handler(CommandHandler("restart", handle_restart_command))
+    application.add_handler(CommandHandler("memory", handle_memory_command))
+    application.add_handler(CallbackQueryHandler(handle_memory_callback, pattern="^memory_"))
     
     # [V7.0] 시간 시계 관리 명령어 (메뉴 호출)
     application.add_handler(CommandHandler("time", handle_time_command))

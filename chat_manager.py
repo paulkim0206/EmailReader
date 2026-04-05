@@ -116,3 +116,34 @@ def get_recent_chat_history_raw(days: int = 14, max_entries: int = 100) -> list:
     except Exception as e:
         logger.error(f"🚨 14일 기억력 필터링 중 오류: {e}")
         return []
+
+def get_chat_status() -> dict:
+    """
+    [V13.1] 현재 대화 장부의 상태(건수, 파일 용량, 최근 기록 시각)를 반환합니다.
+    """
+    try:
+        logs = _load_chat_logs()
+        count = len(logs)
+        size_bytes = os.path.getsize(CHAT_HISTORY_FILE) if os.path.exists(CHAT_HISTORY_FILE) else 0
+        size_kb = round(size_bytes / 1024, 1)
+        last_time = logs[-1]['timestamp'] if logs else "기록 없음"
+        return {"count": count, "size_kb": size_kb, "last_time": last_time}
+    except Exception as e:
+        logger.error(f"대화 장부 상태 조회 중 오류: {e}")
+        return {"count": 0, "size_kb": 0, "last_time": "오류"}
+
+def clear_chat_history() -> bool:
+    """
+    [V13.1] 대화 장부(JSON)를 완전히 비우고, 메모리 캐시도 즉시 리로드합니다.
+    """
+    global _CHAT_LOGS_CACHE
+    try:
+        with _CHAT_LOCK:
+            with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
+                json.dump([], f)
+            _CHAT_LOGS_CACHE = []  # 메모리 캐시도 즉시 비움
+        logger.info("대화 장부 초기화 및 캐시 리로드 완료.")
+        return True
+    except Exception as e:
+        logger.error(f"대화 장부 초기화 중 오류: {e}")
+        return False
