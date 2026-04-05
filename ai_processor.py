@@ -254,6 +254,23 @@ def extract_skip_rule_ai(subject: str, body: str) -> str:
         f"예: 📊 [단순 데이터 공유] 매일 반복되는 원자재 및 부품의 재고 현황 단순 리스트"
     )
     
+    # --- [X-RAY DEBUG START] ---
+    try:
+        debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
+        with open(debug_log_path, "a", encoding="utf-8") as f:
+            tz = pytz.timezone(USER_TIMEZONE)
+            now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"\n{'='*50}\n")
+            f.write(f"[X-RAY DEBUG: extract_skip_rule_ai] {now_str}\n")
+            f.write(f"{'-'*50}\n")
+            f.write(f"[SYSTEM_INSTRUCTION]\n(없음)\n")
+            f.write(f"{'-'*50}\n")
+            f.write(f"[CONTENTS]\n{prompt}\n")
+            f.write(f"{'='*50}\n")
+    except Exception as de:
+        logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
+    # --- [X-RAY DEBUG END] ---
+
     try:
         client = _get_ai_client()
         if not client: return "분석 실패(API 오류)"
@@ -278,17 +295,94 @@ def _fallback_response():
         "summary": "⚠️ <b>[피아니 일시 지연]</b> AI 서버 응답 지연으로 실시간 분석을 중단했습니다. 5분 뒤 배경에서 마지막 1회 추가 요약 시도를 진행하겠습니다."
     }
 
-def chat_with_secretary(user_message: str, replied_text: str = None, include_history: bool = True, include_memos: bool = False) -> str:
+def route_intent(user_message: str) -> str:
+    """
+    [V13.0] AI 기반 초경량 의도 분석 라우터.
+    사용자의 메시지를 읽고 4가지 카테고리 중 하나로 정확히 분류합니다.
+    분류 기준: MAIL_WORK, MEMO_WORK, REPORT_WORK, GENERAL_CHAT
+    """
+    if not GEMINI_API_KEY: return "GENERAL_CHAT"
+    if not user_message: return "GENERAL_CHAT"
+    
+    # [QC] 단순히 '📝 메모보기' 버튼을 누른 경우는 굳이 AI를 거칠 필요 없이 토큰 0개로 즉시 라우팅합니다.
+    if user_message.strip() == "📝 메모보기":
+        return "MEMO_WORK"
+
+    prompt = (
+        "너는 부장님의 지시 의도를 정확히 파악하는 초고속 의도 분석 라우터(Router)다.\n"
+        "다음 사용자의 메시지를 읽고, 오직 아래 4가지 영문 카테고리 이름 중 하나만 결과로 출력하라. (설명, 인사말 등 다른 말은 절대 금지)\n\n"
+        "[카테고리]\n"
+        "1. MAIL_WORK : 이메일 요약, 메일 수신 확인, 스킵 이유 등 메일과 관련된 질문\n"
+        "2. MEMO_WORK : 수첩 목록 확인, 메모 내용 저장/삭제/수정, 특정 항목 완료 지시\n"
+        "3. REPORT_WORK : 일일 보고서, 주간 보고서 생성 요청\n"
+        "4. GENERAL_CHAT : 일상적인 인사, 안부, 궁금증, 잡담, 칭찬, 비서 자체와의 대화\n\n"
+        f"대상 메시지: {user_message[:500]}\n"
+        "정답 카테고리:"
+    )
+
+    try:
+        from token_manager import log_token
+        client = _get_ai_client()
+        if not client: return "GENERAL_CHAT"
+
+        # --- [X-RAY DEBUG START] ---
+        try:
+            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
+            with open(debug_log_path, "a", encoding="utf-8") as f:
+                tz = pytz.timezone(USER_TIMEZONE)
+                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"\n{'='*50}\n")
+                f.write(f"[X-RAY DEBUG: route_intent] {now_str}\n")
+                f.write(f"{'-'*50}\n")
+                f.write(f"[SYSTEM_INSTRUCTION]\n(없음)\n")
+                f.write(f"{'-'*50}\n")
+                f.write(f"[CONTENTS]\n{prompt}\n")
+                f.write(f"{'='*50}\n")
+        except Exception as de:
+            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
+        # --- [X-RAY DEBUG END] ---
+
+        # 가장 빠르고 일관된 출력을 위해 temperature 최소화 설정
+        response = client.models.generate_content(
+            model=AI_MODEL, 
+            contents=prompt,
+             config=types.GenerateContentConfig(temperature=0.0)
+        )
+        
+        # [V12.25] 토큰 기록 (라우터 전용)
+        if hasattr(response, 'usage_metadata') and response.usage_metadata:
+            log_token("Intent_Router", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
+
+        result = response.text.strip().upper() if response.text else "GENERAL_CHAT"
+        logger.info(f"[Intent Router] AI 판단 원본 결과: {result}")
+        
+        if "MAIL" in result: return "MAIL_WORK"
+        elif "MEMO" in result: return "MEMO_WORK"
+        elif "REPORT" in result: return "REPORT_WORK"
+        else: return "GENERAL_CHAT"
+        
+    except Exception as e:
+        logger.error(f"의도 분류 중 오류 (기본값 GENERAL_CHAT 설정): {e}")
+        return "GENERAL_CHAT"
+
+def chat_with_secretary(user_message: str, replied_text: str = None, include_history: bool = True, include_memos: bool = False, intent: str = "GENERAL_CHAT") -> str:
     """
     [V12.16] 초고성능 실시간 기억력 이식 (True Multi-turn API 적용)
-    [V12.31] 실속형 비서 체질 개선: 평소에는 수첩 내용을 숨겨서 인지 과부하를 방지합니다.
+    [V13.0] 프롬프트 기능 분할 수술 적용 (동적 어빌리티 로딩)
     """
     if not GEMINI_API_KEY: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
 
     # 1. 수석 비서용 정체성 조립 (System Persona)
-    # 대화 시에는 '말수 제한 봉인'이 해제된 성격과 비서의 능동적 지침을 합체합니다.
     chat_prompt = _read_prompt_file("peani_persona.txt")
-    chat_prompt += f"\n\n{load_ability('secretary')}\n\n{_read_prompt_file('telegram_commands.txt')}"
+    
+    # [새로운 아키텍처] 의도(Intent)에 따라 필요한 '기능형 스위치 프롬프트'만 이식하여 토큰을 절약합니다!
+    if intent == "MEMO_WORK":
+        chat_prompt += f"\n\n{load_ability('memo_trigger')}"
+    elif intent == "REPORT_WORK":
+        chat_prompt += f"\n\n{load_ability('report_trigger')}"
+        
+    # 명령어 도우미는 항상 곁들입니다.
+    chat_prompt += f"\n\n{_read_prompt_file('telegram_commands.txt')}"
     
     # 2. 고정 지식(수첩/시간) 주입
     if include_memos:
@@ -375,6 +469,23 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
         client = _get_ai_client()
         if not client: return {"topics": [{"category": "오류", "items": ["API 연결 실패"]}]}
 
+        # --- [X-RAY DEBUG START] ---
+        try:
+            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
+            with open(debug_log_path, "a", encoding="utf-8") as f:
+                tz = pytz.timezone(USER_TIMEZONE)
+                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"\n{'='*50}\n")
+                f.write(f"[X-RAY DEBUG: generate_daily_report_ai] {now_str}\n")
+                f.write(f"{'-'*50}\n")
+                f.write(f"[SYSTEM_INSTRUCTION]\n{dynamic_prompt}\n")
+                f.write(f"{'-'*50}\n")
+                f.write(f"[CONTENTS]\n{data_text}\n")
+                f.write(f"{'='*50}\n")
+        except Exception as de:
+            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
+        # --- [X-RAY DEBUG END] ---
+
         response = client.models.generate_content(
             model=AI_MODEL, contents=data_text,
             config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
@@ -403,6 +514,23 @@ def generate_weekly_summary_ai(daily_reports: dict) -> dict:
         client = _get_ai_client()
         if not client: return {"weekly_summary": "분석 실패", "key_achievements": []}
         
+        # --- [X-RAY DEBUG START] ---
+        try:
+            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
+            with open(debug_log_path, "a", encoding="utf-8") as f:
+                tz = pytz.timezone(USER_TIMEZONE)
+                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"\n{'='*50}\n")
+                f.write(f"[X-RAY DEBUG: generate_weekly_summary_ai] {now_str}\n")
+                f.write(f"{'-'*50}\n")
+                f.write(f"[SYSTEM_INSTRUCTION]\n{dynamic_prompt}\n")
+                f.write(f"{'-'*50}\n")
+                f.write(f"[CONTENTS]\n{week_text}\n")
+                f.write(f"{'='*50}\n")
+        except Exception as de:
+            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
+        # --- [X-RAY DEBUG END] ---
+
         response = client.models.generate_content(
             model=AI_MODEL, contents=week_text,
             config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")

@@ -774,11 +774,8 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # [중요] '📝 메모보기' 버튼은 별도로 가로채지 않습니다. 
     # 부장님의 지시대로 피아니(AI)가 직접 뇌를 써서 미완료 업무만 브리핑하도록 대화 흐름을 유지합니다.
 
-    # 1. 사용자 말씀 기록
-    try:
-        from chat_manager import save_chat_log
-        save_chat_log(role='user', content=user_text)
-    except Exception: pass
+    # [대수술] 이전의 '무조건적인 사용자 기록(save_chat_log)' 로직을 삭제했습니다.
+    # 의도 파악이 끝난 후 GENERAL_CHAT 일때 한꺼번에 기록합니다.
     
     # 답장(Reply) 맥락 파악
     replied_text = None
@@ -788,40 +785,52 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action='typing')
     
     try:
-        # 2. AI 답변 생성
-        from ai_processor import chat_with_secretary
+        # 2. AI 답변 생성 전 의도 파악 (Routing)
+        from ai_processor import route_intent, chat_with_secretary
         
-        # [V12.31] 실속형 비서: 메모와 관련된 대화일 때만 수첩을 노출하며, 인지 부하를 줄입니다.
+        # [혁신] 부장님의 말씀 의도를 먼저 파악합니다.
+        intent = await asyncio.to_thread(route_intent, user_text)
+        
+        # [토큰 다이어트 기준 적용]
         use_memos = False
         use_history = True
         
-        # 부장님이 메모 관련 말씀을 하실 때만 수첩을 꺼냅니다.
-        memo_keywords = ["메모", "수첩", "적어", "기록", "완료", "다했어", "처리", "지워", "수정", "변경"]
-        if any(kw in user_text for kw in memo_keywords) or user_text == "📝 메모보기":
+        if intent == "MEMO_WORK":
             use_memos = True
-            logger.info(f"📔 [수첩 지참] 메모 관련 키워드 감지 ('{user_text}'): 수첩을 함께 전달합니다.")
+            use_history = False # 메모 작업에는 일상 대화가 필요 없습니다.
+        elif intent in ["REPORT_WORK", "MAIL_WORK"]:
+            use_memos = False
+            use_history = False # 보고/메일 작업에도 일상 대화나 수첩이 불필요합니다.
+        else: # GENERAL_CHAT
+            use_memos = False
+            use_history = True
             
-        if user_text == "📝 메모보기":
-            use_history = False
-            logger.info("🚫 [메모 전용 브리핑] 과거 대화 맥락을 차단하고 오직 장부 파일에만 집중합니다.")
+        logger.info(f"선택된 모드: {intent} (기억력 적용: {use_history}, 수첩 적용: {use_memos})")
 
         ai_reply = await asyncio.to_thread(
             chat_with_secretary, 
             user_message=user_text, 
             replied_text=replied_text, 
             include_history=use_history,
-            include_memos=use_memos
+            include_memos=use_memos,
+            intent=intent
         )
 
         
         # 3. [V12.16] AI 답변 내의 명령 태그들을 처리할 때 '오답 맥락(replied_text)'을 함께 태웁니다.
         ai_reply = await _process_ai_tags(ai_reply, update, context, replied_text)
 
-        # 4. 피아니의 답변 기록
-        try:
-            from chat_manager import save_chat_log
-            save_chat_log(role='assistant', content=ai_reply)
-        except Exception: pass
+        # 4. [신규 핵심 로직] 오직 GENERAL_CHAT일 때만 히스토리에 기록!!
+        if intent == "GENERAL_CHAT":
+            try:
+                from chat_manager import save_chat_log
+                save_chat_log(role='user', content=user_text)
+                save_chat_log(role='assistant', content=ai_reply)
+                logger.info("✅ 순수 대화(GENERAL_CHAT)로 분류되어 장부에 영구 기록되었습니다.")
+            except Exception as e:
+                logger.error(f"장부 저장 실패: {e}")
+        else:
+            logger.info(f"🚫 작업 모드({intent})로 분류되어 대화 이력 장부에 기록하지 않고 휘발시킵니다.")
 
         # 5. 최종 답변 전송
         await update.message.reply_text(ai_reply)
