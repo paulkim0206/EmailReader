@@ -193,7 +193,24 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
             if not client: return _fallback_response()
             
             req_config = types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
-            
+
+            # --- [X-RAY DEBUG START] --- 
+            try:
+                debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
+                with open(debug_log_path, "a", encoding="utf-8") as f:
+                    tz = pytz.timezone(USER_TIMEZONE)
+                    now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                    f.write(f"\n{'='*50}\n")
+                    f.write(f"[X-RAY DEBUG: process_email_with_ai] {now_str}\n")
+                    f.write(f"{'-'*50}\n")
+                    f.write(f"[SYSTEM_INSTRUCTION]\n{dynamic_prompt}\n")
+                    f.write(f"{'-'*50}\n")
+                    f.write(f"[CONTENTS]\n{final_text}\n")
+                    f.write(f"{'='*50}\n")
+            except Exception as de:
+                logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
+            # --- [X-RAY DEBUG END] ---
+
             # [V12.7] 단일 정예 엔진(AI_MODEL)으로 승부
             response = client.models.generate_content(model=AI_MODEL, contents=final_text, config=req_config)
             result = json.loads(_clean_ai_json(response.text))
@@ -309,7 +326,24 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
 
         client = _get_ai_client()
         if not client: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
-        
+
+        # --- [X-RAY DEBUG START] ---
+        try:
+            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
+            with open(debug_log_path, "a", encoding="utf-8") as f:
+                tz = pytz.timezone(USER_TIMEZONE)
+                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"\n{'='*50}\n")
+                f.write(f"[X-RAY DEBUG: chat_with_secretary] {now_str}\n")
+                f.write(f"{'-'*50}\n")
+                f.write(f"[SYSTEM_INSTRUCTION]\n{chat_prompt}\n")
+                f.write(f"{'-'*50}\n")
+                f.write(f"[CONTENTS]\n{contents}\n")
+                f.write(f"{'='*50}\n")
+        except Exception as de:
+            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
+        # --- [X-RAY DEBUG END] ---
+
         # [혁신] 단일 메시지가 아닌 '누적된 대화 흐름(contents)' 전체를 바탕으로 응답을 생성합니다.
         response = client.models.generate_content(
             model=AI_MODEL, 
