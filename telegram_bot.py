@@ -731,21 +731,25 @@ async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.
         from report_manager import generate_weekly_summary
         logger.info("온디맨드 주간 보고서 생성 시작")
         report_data = await asyncio.to_thread(generate_weekly_summary)
-        
-        if report_data:
-            summary_msg = f"✅ <b>금주 주간 업무 보고서 작성을 완료했습니다!</b>\n\n"
-            summary_msg += f"📊 <b>주간 전술적 분석:</b>\n{escape_for_tg(report_data.get('주간 전술적 분석', '분석 완료'))}\n\n"
-            
-            achievements = report_data.get("key_achievements", [])
-            if achievements:
-                summary_msg += "🏆 <b>이번 주 핵심 추진 성과:</b>\n"
-                for item in achievements:
-                    summary_msg += f"- {escape_for_tg(item)}\n"
-                summary_msg += "\n"
-            
 
-            summary_msg += f"\n부장님의 전략적 의사결정을 돕기 위해 최선을 다해 분석했습니다. 수고하셨습니다! 👍"
-            await update.message.reply_text(summary_msg, parse_mode="HTML")
+        if report_data:
+            week_label = report_data.get("week_label", "")
+            client_summary = report_data.get("client_summary", {})
+            total_items = report_data.get("total_items", 0)
+
+            # 헤더 메시지 전송
+            header = f"<b>주간 업무 종합 ({week_label})</b>\n고객 {len(client_summary)}사 / 총 {total_items}건\n"
+            await update.message.reply_text(header, parse_mode="HTML")
+
+            # 고객별로 메시지 분할 전송 (텔레그램 4096자 제한 대응)
+            for client, items in sorted(client_summary.items()):
+                msg = f"<b>{escape_for_tg(client)}</b>\n"
+                for item in items:
+                    msg += f"- {escape_for_tg(item)}\n"
+                # 4000자 초과 시 잘라서 전송
+                if len(msg) > 4000:
+                    msg = msg[:4000] + "\n...(생략)"
+                await update.message.reply_text(msg, parse_mode="HTML")
         else:
             await update.message.reply_text("⚠️ 주간 보고서 생성을 위한 데이터가 부족합니다.")
         ai_reply = re.sub(r"\[\[GENERATE_WEEKLY_REPORT\]\].*?\[\[/GENERATE_WEEKLY_REPORT\]\]", "", ai_reply, flags=re.DOTALL).strip()

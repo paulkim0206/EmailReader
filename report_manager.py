@@ -77,39 +77,70 @@ def update_daily_report(date_str=None):
 
 def generate_weekly_summary():
     """
-    [V12.14] 한 주의 흐름을 분석하며, 날짜 계산 시 현지 시각을 기준으로 합니다.
+    [V13.2] AI 없이 파이썬만으로 월~토 일일 보고서를 고객별로 재분류합니다.
+    토큰 0원, 팩트만 전달합니다.
     """
-    # [핵심 수정] 현지 시각 기준으로 어제(일요일) 데이터를 참조하여 주차 파일을 결정합니다.
     tz = pytz.timezone(USER_TIMEZONE)
     today = datetime.datetime.now(tz).date()
     reference_date = today - datetime.timedelta(days=1)
-    
+
     report_path = get_weekly_report_path(reference_date)
     weekly_data = load_weekly_report(report_path)
-    
+
     if not weekly_data:
         logger.warning(f"⚠️ 주간 보고서를 위한 데이터가 없습니다. (참조 파일: {os.path.basename(report_path)})")
         return None
 
-    # 월~토요일 데이터만 필터링 (부장님 지침: 6일치만 담을 것)
-    daily_reports_for_ai = {}
-    for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]:
-        if day in weekly_data:
-            daily_reports_for_ai[day] = weekly_data[day]["data"]
+    # 요일 한글 매핑
+    day_labels = {
+        "Monday": "월", "Tuesday": "화", "Wednesday": "수",
+        "Thursday": "목", "Friday": "금", "Saturday": "토"
+    }
 
-    if not daily_reports_for_ai:
+    # 고객별 집계 딕셔너리
+    client_summary = {}
+
+    for day_en, label in day_labels.items():
+        if day_en not in weekly_data:
+            continue
+        data = weekly_data[day_en].get("data", {})
+        if not isinstance(data, dict):
+            continue
+
+        # client_reports 구조만 처리 (현재 표준)
+        for cr in data.get("client_reports", []):
+            client = cr.get("client", "알 수 없음").strip()
+            if not client:
+                continue
+            if client not in client_summary:
+                client_summary[client] = []
+            for s in cr.get("summaries", []):
+                client_summary[client].append(f"[{label}] {s}")
+
+    if not client_summary:
+        logger.warning("주간 데이터를 집계했으나 client_reports 항목이 없습니다.")
         return None
 
-    # 1. AI 분석 (주간 통합 및 중복 제거)
-    from ai_processor import generate_weekly_summary_ai
-    summary_json = generate_weekly_summary_ai(daily_reports_for_ai)
+    # 주차 레이블 계산
+    year, week_num, _ = reference_date.isocalendar()
+    # 해당 주의 월요일/토요일 계산
+    monday = reference_date - datetime.timedelta(days=reference_date.weekday())
+    saturday = monday + datetime.timedelta(days=5)
+    week_label = f"{year} W{week_num:02d} ({monday.strftime('%m-%d')} ~ {saturday.strftime('%m-%d')})"
 
-    # 2. 결과 저장
+    result = {
+        "week_label": week_label,
+        "client_summary": client_summary,
+        "total_items": sum(len(v) for v in client_summary.values())
+    }
+
+    # WeeklySummary로 저장 (온디맨드 재호출 방지용)
     weekly_data["WeeklySummary"] = {
         "generated_at": datetime.datetime.now().isoformat(),
-        "content": summary_json
+        "content": result
     }
     save_weekly_report(report_path, weekly_data)
-    logger.info(f"주간 통합 보고서 생성이 완료되었습니다: {os.path.basename(report_path)}")
-    
-    return summary_json
+    logger.info(f"주간 집계 보고서 생성 완료: {week_label} / 고객 {len(client_summary)}사 / 총 {result['total_items']}건")
+
+    return result
+
