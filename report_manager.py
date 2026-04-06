@@ -68,6 +68,11 @@ def update_daily_report(date_str=None):
     from ai_processor import generate_daily_report_ai
     report_json = generate_daily_report_ai(raw_summaries)
 
+    # [V18.4] 방어 로직: 보고서가 오류 데이터(NameError 등)를 포함하고 있다면 저장하지 않습니다.
+    if not report_json or (isinstance(report_json, dict) and any(t.get("category") == "오류" for t in report_json.get("topics", []))):
+        logger.warning(f"⚠️ [{date_str}] 생성된 보고서가 유효하지 않거나 오류를 포함하고 있어 저장을 건너뜁니다.")
+        return report_json
+
     # 3. 주간 통합 파일 업데이트
     report_path = get_weekly_report_path(target_date_obj)
     weekly_data = load_weekly_report(report_path)
@@ -80,7 +85,7 @@ def update_daily_report(date_str=None):
     }
     
     save_weekly_report(report_path, weekly_data)
-    logger.info(f"[{date_str}] 일일 보고서가 주간 장부({os.path.basename(report_path)})에 기록되었습니다.")
+    logger.info(f"✅ [{date_str}] 보고서가 성공적으로 주간 장고에 기록되었습니다.")
     
     return report_json
 

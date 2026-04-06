@@ -579,9 +579,15 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
             config=types.GenerateContentConfig(system_instruction=chat_prompt)
         )
         
-        # [V12.25] 토큰 기록
+        # [V18.4] 토큰 로깅 정예화: 디버그 리포트 생성을 위해 프롬프트/답변 텍스트를 함께 넘깁니다.
         if response.usage_metadata:
-            log_token("Secretary_Chat", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
+            log_token(
+                task="Secretary_Chat", 
+                prompt_tokens=response.usage_metadata.prompt_token_count, 
+                candidate_tokens=response.usage_metadata.candidates_token_count,
+                prompt_text=chat_prompt, 
+                response_text=response.text
+            )
             
         # [V12.16] AI 응답이 비어있거나(None) 차단되었을 때를 대비한 최종 방어선
         return response.text or "🚨 앗, 부장님! 방금 머릿속에 안개가 낀 것처럼 답변이 떠오르지 않습니다. 다시 한번 말씀해 주시겠어요?"
@@ -625,9 +631,15 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
             config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         )
         
-        # [V12.25] 토큰 기록
+        # [V12.25] 토큰 기록 (V18.4 오타 수정: prompt -> dynamic_prompt)
         if response.usage_metadata:
-            log_token("Daily_Report", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count, prompt_text=prompt, response_text=response.text)
+            log_token(
+                task="Daily_Report", 
+                prompt_tokens=response.usage_metadata.prompt_token_count, 
+                candidate_tokens=response.usage_metadata.candidates_token_count, 
+                prompt_text=f"{dynamic_prompt}\n\n[DATA]\n{data_text}", 
+                response_text=response.text
+            )
             
         return json.loads(_clean_ai_json(response.text))
     except Exception:
