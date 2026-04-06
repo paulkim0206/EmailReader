@@ -104,3 +104,74 @@ def get_daily_token_usage(target_date=None):
         "total_sum": total_in + total_out,
         "request_count": count
     }
+
+def get_daily_token_report_message(target_date=None):
+    """
+    [V16.6] 부장님을 위한 '실속형 데일리 토큰 정산서'를 생성합니다.
+    카테고리별로 (In: XXX / Out: YYY) 상세 내역을 포함합니다.
+    """
+    if not target_date:
+        tz = pytz.timezone(USER_TIMEZONE)
+        target_date = datetime.datetime.now(tz).strftime("%Y-%m-%d")
+    
+    # 1. 카테고리별 합산 준비
+    usage_by_task = {}
+    total_in = 0
+    total_out = 0
+    total_requests = 0
+    
+    # 한글 이름 매핑
+    task_map = {
+        "Mail_Summary": "📧 새 이메일 요약",
+        "Intent_Router": "🕵️ 의도 분석 라우터",
+        "Secretary_Chat": "🤖 비서와의 지능형 대화",
+        "Skip_Rule_Analysis": "🏠 스킵(제외) 규칙 추출",
+        "Daily_Report": "📅 일일 비즈니스 보고서 생성",
+        "Weekly_Report": "📊 주간 통합 보고서 생성",
+        "Unknown": "❓ 기타 작업"
+    }
+
+    if os.path.exists(TOKEN_USAGE_FILE):
+        try:
+            with _TOKEN_LOCK:
+                with open(TOKEN_USAGE_FILE, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for entry in data:
+                        if entry.get("date") == target_date:
+                            task = entry.get("task", "Unknown")
+                            t_in = entry.get("input_tokens", 0)
+                            t_out = entry.get("output_tokens", 0)
+                            
+                            if task not in usage_by_task:
+                                usage_by_task[task] = {"in": 0, "out": 0}
+                            
+                            usage_by_task[task]["in"] += t_in
+                            usage_by_task[task]["out"] += t_out
+                            total_in += t_in
+                            total_out += t_out
+                            total_requests += 1
+        except Exception as e:
+            logger.error(f"토큰 장부 합산 중 오류: {e}")
+            return None
+
+    if total_requests == 0:
+        return None
+
+    # 2. 메시지 조립
+    msg = f"🪙 <b>[피아니] 오늘의 AI 토큰 정산서</b>\n"
+    msg += f"📅 <b>기준일:</b> {target_date}\n\n"
+    msg += f"📊 <b>전체 이용 현황</b>\n"
+    msg += f"- 요청 건수: {total_requests}건\n"
+    msg += f"- 총 사용량: <b>{total_in + total_out:,}</b> 💡 (In: {total_in:,} / Out: {total_out:,})\n\n"
+    msg += f"📂 <b>카테고리별 지출 상세</b>\n"
+    
+    # 지출이 많은 순서대로 정렬해서 보여드립니다.
+    sorted_tasks = sorted(usage_by_task.items(), key=lambda x: (x[1]["in"] + x[1]["out"]), reverse=True)
+    
+    for task_id, tokens in sorted_tasks:
+        name = task_map.get(task_id, task_id)
+        msg += f"- {name}: <b>{tokens['in'] + tokens['out']:,}</b> 🪙 (In: {tokens['in']:,} / Out: {tokens['out']:,})\n"
+        
+    msg += f"\n✅ 부장님, 오늘도 알뜰하고 똑똑하게 AI를 운용하셨습니다! 👍"
+    
+    return msg

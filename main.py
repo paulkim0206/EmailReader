@@ -21,37 +21,67 @@ LAST_REPORT_LOG = os.path.join(BASE_DIR, "data", "last_report.json")
 
 async def handle_scheduled_reports(application: Application):
     """
-    [V11.8] 매일 오전 6시에 보고서를 자동 발송합니다.
-    월요일은 '주간 보고', 그 외 요일은 '일일 보고'를 전담 비서(함수)가 처리합니다.
+    [V11.8] 매일 정해진 시간에 자동 보고서를 발송합니다.
+    - 00:00 (자정): 어제 하루 동안 사용한 AI 토큰 정산 보고
+    - 06:00 (오전): 전일 업무 또는 한 주간 업무 종합 보고
     """
     try:
         tz = pytz.timezone(USER_TIMEZONE)
         now = datetime.datetime.now(tz)
         today_str = now.strftime("%Y-%m-%d")
         
-        if now.hour != 6:
+        # [V16.6] 스케줄링 운영 시간 확장
+        if now.hour not in [0, 6]:
             return
 
+        # 중복 보고 방지를 위한 정밀 장부 로드
+        last_log = {}
         if os.path.exists(LAST_REPORT_LOG):
-            with open(LAST_REPORT_LOG, "r") as f:
-                last_log = json.load(f)
-                if last_log.get("date") == today_str:
-                    return
+            try:
+                with open(LAST_REPORT_LOG, "r") as f:
+                    last_log = json.load(f)
+            except Exception:
+                last_log = {}
 
-        # [V12.14] 현지 시각 기준 '어제' 날짜를 명확히 계산하여 전달합니다.
-        yesterday_obj = now - datetime.timedelta(days=1)
-        yesterday_str = yesterday_obj.strftime("%Y-%m-%d")
+        # --- [1] 새벽 0시: 데일리 토큰 정산 보고서 ---
+        if now.hour == 0:
+            if last_log.get("token_report") != today_str:
+                from token_manager import get_daily_token_report_message
+                # 자정에 보고하는 것은 '어제' 하루치 데이터입니다.
+                yesterday_obj = now - datetime.timedelta(days=1)
+                yesterday_str = yesterday_obj.strftime("%Y-%m-%d")
+                
+                token_msg = get_daily_token_report_message(yesterday_str)
+                if token_msg:
+                    await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=token_msg, parse_mode="HTML")
+                    logger.info(f"✅ 자정 토큰 정산 리포트 발송 완료 ({yesterday_str})")
+                
+                # 토큰 보고 완료 기록
+                last_log["token_report"] = today_str
+                with open(LAST_REPORT_LOG, "w") as f:
+                    json.dump(last_log, f)
+            return
 
-        # [V11.8] 업무 분리: 월요일은 주간 통합, 나머지는 일일 업무 보고
-        if now.weekday() == 0:
-            await send_weekly_business_report(application)
-        else:
-            await send_daily_business_report(application, target_date=yesterday_str)
+        # --- [2] 오전 6시: 비즈니스 업무 보고서 ---
+        if now.hour == 6:
+            if last_log.get("business_report") == today_str or last_log.get("date") == today_str:
+                return
 
-        # 장부에 기록 (보고 완료)
-        os.makedirs(os.path.dirname(LAST_REPORT_LOG), exist_ok=True)
-        with open(LAST_REPORT_LOG, "w") as f:
-            json.dump({"date": today_str}, f)
+            # 현지 시각 기준 '어제' 날짜 계산
+            yesterday_obj = now - datetime.timedelta(days=1)
+            yesterday_str = yesterday_obj.strftime("%Y-%m-%d")
+
+            if now.weekday() == 0: # 월요일은 주간 통합
+                await send_weekly_business_report(application)
+            else: # 나머지는 일일 업무 보고
+                await send_daily_business_report(application, target_date=yesterday_str)
+
+            # 업무 보고 완료 기록 (구형 필드 'date'와 신형 필드 'business_report' 병행 기록)
+            last_log["business_report"] = today_str
+            last_log["date"] = today_str 
+            os.makedirs(os.path.dirname(LAST_REPORT_LOG), exist_ok=True)
+            with open(LAST_REPORT_LOG, "w") as f:
+                json.dump(last_log, f)
 
     except Exception as e:
         logger.error(f"스케줄 보고서 트리거 중 오류: {e}")
