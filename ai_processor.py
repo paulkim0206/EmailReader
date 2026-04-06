@@ -532,8 +532,24 @@ def generate_weekly_summary_ai(daily_reports: dict) -> dict:
     dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('weekly_strategy')}"
     week_text = ""
     for day, data in daily_reports.items():
-        if isinstance(data, dict) and "topics" in data:
-            week_text += f"\n[{day}]\n" + "\n".join([f"- {t['category']}: {', '.join(t['items'])}" for t in data["topics"]])
+        if not isinstance(data, dict):
+            continue
+        day_lines = []
+
+        # [구조 1 - 현재 표준] client_reports 방식 (일간 보고서)
+        if "client_reports" in data:
+            for cr in data["client_reports"]:
+                client = cr.get("client", "알 수 없음")
+                for s in cr.get("summaries", []):
+                    day_lines.append(f"- [{client}] {s}")
+
+        # [구조 2 - 구형 호환] topics 방식 (과거 데이터 호환용)
+        elif "topics" in data:
+            for t in data["topics"]:
+                day_lines.append(f"- {t.get('category', '')}: {', '.join(t.get('items', []))}")
+
+        if day_lines:
+            week_text += f"\n[{day}]\n" + "\n".join(day_lines)
 
     try:
         client = _get_ai_client()
