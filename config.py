@@ -95,6 +95,11 @@ RSS_URLS = [
 RSS_CHECK_INTERVAL = 5  # RSS 체크 주기 (분)
 PROCESSED_RSS_FILE = os.path.join(DATA_DIR, "processed_rss.txt") # 뉴스 중복 방지 장부
 
+# [V17.2] AI 토큰 세이프가드 (비용 폭탄 방지 시스템)
+TOKEN_ALERT_THRESHOLD = 10000 # 한 번의 AI 호출당 경고 임계값
+HIGH_TOKEN_REPORTS_DIR = os.path.join(DATA_DIR, "high_token_reports")
+os.makedirs(HIGH_TOKEN_REPORTS_DIR, exist_ok=True)
+
 # 전역 로거(Logger) 설정 함수
 def setup_logger():
     # 로거 인스턴스 생성

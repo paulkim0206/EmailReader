@@ -8,15 +8,16 @@ from config import TOKEN_USAGE_FILE, USER_TIMEZONE, logger
 # 동시에 여러 공정이 기록을 시도할 때 파일이 깨지지 않게 방어하는 잠금 장치입니다.
 _TOKEN_LOCK = threading.Lock()
 
-def log_token(task, prompt_tokens, candidate_tokens):
+def log_token(task, prompt_tokens, candidate_tokens, prompt_text=None, response_text=None):
     """
     [V12.25] AI 사용 시 발생하는 입/출력 토큰을 부장님 전용 장부에 기록합니다.
+    [V17.2] 1만 토큰 초과 시 🚨 경보 발령 및 정밀 진단 리포트를 생성합니다.
     """
     try:
-        # [V12.27] 부장님의 정석 지침: 프로젝트 표준(pytz + USER_TIMEZONE) 방식으로 복구
-        # 이제 지역을 어디로 바꿔도 설정된 타임존에 맞춰 자동으로 기록됩니다.
+        from config import TOKEN_ALERT_THRESHOLD, HIGH_TOKEN_REPORTS_DIR
         tz = pytz.timezone(USER_TIMEZONE)
         now = datetime.datetime.now(tz)
+        total_tokens = (prompt_tokens or 0) + (candidate_tokens or 0)
         
         # 장부에 기록될 한 줄의 데이터 구성
         entry = {
@@ -25,46 +26,72 @@ def log_token(task, prompt_tokens, candidate_tokens):
             "task": task,
             "input_tokens": prompt_tokens or 0,
             "output_tokens": candidate_tokens or 0,
-            "total_tokens": (prompt_tokens or 0) + (candidate_tokens or 0)
+            "total_tokens": total_tokens
         }
 
         with _TOKEN_LOCK:
-            # 1. 기존 장부가 있는지 확인하고 읽어옵니다.
             data = []
             if os.path.exists(TOKEN_USAGE_FILE):
                 try:
                     with open(TOKEN_USAGE_FILE, "r", encoding="utf-8") as f:
                         data = json.load(f)
                 except Exception:
-                    # 파일이 깨졌거나 비어있으면 새로 시작합니다.
                     data = []
             
-            # 2. 새 기록을 추가합니다.
             data.append(entry)
-            
-            # 3. 장부를 다시 저장합니다. (가독성을 위해 예쁘게 들여쓰기)
             with open(TOKEN_USAGE_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
             
-        logger.info(f"🪙 토큰 기록 완료: {task} (In: {prompt_tokens}, Out: {candidate_tokens})")
+        logger.info(f"🪙 토큰 기록 완료: {task} (Total: {total_tokens})")
 
-        # [V12.30] 부장님 지시: 실시간 텔레그램 토큰 사용량 직통 알림 발송 (동기식)
+        # [V17.2] 1만 토큰 초과 시 정밀 진단 리포트 생성
+        is_high_token = total_tokens >= TOKEN_ALERT_THRESHOLD
+        report_path = ""
+        if is_high_token and prompt_text:
+            filename = f"report_{now.strftime('%Y%m%d_%H%M%S')}_{task}.txt"
+            report_path = os.path.join(HIGH_TOKEN_REPORTS_DIR, filename)
+            try:
+                with open(report_path, "w", encoding="utf-8") as rf:
+                    rf.write(f"⚠️ [고비용 AI 호출 정밀 진단 리포트] ⚠️\n")
+                    rf.write(f"일시: {now.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    rf.write(f"작업명: {task}\n")
+                    rf.write(f"사용량: {total_tokens} (In: {prompt_tokens}, Out: {candidate_tokens})\n")
+                    rf.write(f"{'='*50}\n\n")
+                    rf.write(f"[1. AI 지침 및 입력 원문]\n{prompt_text}\n\n")
+                    rf.write(f"{'-'*50}\n\n")
+                    rf.write(f"[2. AI 답변 원문]\n{response_text}\n")
+                logger.warning(f"🚨 고비용 리포트 생성 완료: {report_path}")
+            except Exception as re:
+                logger.error(f"리포트 생성 중 오류: {re}")
+
+        # [V12.30] 실시간 텔레그램 토큰 사용량 직통 알림 발송 (동기식)
         try:
             from urllib import request as url_req
-            from urllib import error
             from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
             
-            # 기능을 부장님이 이해하기 쉽게 한글로 예쁘게 포장합니다.
             task_kr = {
-                "Mail_Summary": "새 이메일 요약",
-                "Intent_Router": "의도 분석 라우터",
-                "Secretary_Chat": "비서와의 지능형 대화",
-                "Skip_Rule_Analysis": "스킵(제외) 규칙 추출",
-                "Daily_Report": "일일 비즈니스 보고서 생성",
-                "Weekly_Report": "주간 통합 보고서 생성"
+                "Mail_Summary": "📧 새 이메일 요약",
+                "Intent_Router": "🕵️ 의도 분석 라우터",
+                "Secretary_Chat": "🤖 비서와의 지능형 대화",
+                "Skip_Rule_Analysis": "🏠 스킵 규칙 추출",
+                "Daily_Report": "📅 일일 비즈니스 보고 생성",
+                "Weekly_Report": "📊 주간 통합 보고 생성",
+                "News_Summary": "📰 뉴스 속보 요약"
             }.get(task, task)
             
-            msg = f"🪙 <b>[실시간 토큰 알림]</b>\n\n🎯 <b>작업:</b> {task_kr}\n📥 <b>입력:</b> {prompt_tokens or 0} 토큰\n📤 <b>출력:</b> {candidate_tokens or 0} 토큰"
+            if is_high_token:
+                msg = (
+                    f"🚨 <b>[토큰 사용량 레드라인 경보]</b> 🚨\n\n"
+                    f"🎯 <b>위험 작업:</b> {task_kr}\n"
+                    f"🔥 <b>총 사용량: {total_tokens:,} 토큰</b>\n"
+                    f"📥 입력: {prompt_tokens:,} / 📤 출력: {candidate_tokens:,}\n\n"
+                    f"📢 <b>부장님!</b> 단일 호출 비용이 설정치({TOKEN_ALERT_THRESHOLD})를 초과했습니다.\n"
+                    f"방금 생성된 <code>{os.path.basename(report_path)}</code> 리포트를 확인하시거나, "
+                    f"비정상 동작으로 보이면 <b>/shutdown</b> 명령어로 서버를 멈춰주세요! 🔌"
+                )
+            else:
+                msg = f"🪙 <b>[실시간 토큰 알림]</b>\n\n🎯 <b>작업:</b> {task_kr}\n📥 <b>입력:</b> {prompt_tokens or 0} 토큰\n📤 <b>출력:</b> {candidate_tokens or 0} 토큰"
+            
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
             payload = json.dumps({"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}).encode('utf-8')
             req = url_req.Request(url, data=payload, headers={'Content-Type': 'application/json'})

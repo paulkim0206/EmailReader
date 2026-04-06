@@ -1118,6 +1118,26 @@ async def handle_memory_callback(update: Update, context: ContextTypes.DEFAULT_T
     elif query.data == "memory_cancel":
         await query.edit_message_text("취소되었습니다.")
 
+async def handle_shutdown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V17.2] 부장님의 긴급 명령에 의한 서버 즉시 종료 전용 명령어입니다.
+    이 명령어가 실행되면 봇 서버 프로세스가 완전히 멈춥니다. (수동 재시작 필요)
+    """
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
+
+    logger.warning("🚨 부장님의 명령으로 시스템 강제 종료 시퀀스를 시작합니다.")
+    await update.message.reply_text(
+        "🔌 <b>[시스템 긴급 셧다운]</b>\n\n"
+        "부장님의 명령을 받들어 피아니가 잠시 휴식에 들어갑니다.\n"
+        "서버가 즉시 종료되며, 수동으로 다시 켜기 전까지는 응답할 수 없습니다.\n"
+        "🫡 업무 지시 감사했습니다! 푹 쉬십시오!",
+        parse_mode="HTML"
+    )
+    
+    # 텔레그램 메시지가 확실히 전송될 수 있도록 아주 짧게 대기 후 프로세스 강제 사살
+    await asyncio.sleep(1)
+    os._exit(0)
+
 def setup_telegram_handlers(application: Application):
     # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note', '/update' 옵션을 박아 넣습니다.
     application.add_handler(CommandHandler("status", command_status))
@@ -1129,6 +1149,7 @@ def setup_telegram_handlers(application: Application):
     application.add_handler(CommandHandler("update", handle_update_command))
     application.add_handler(CommandHandler("restart", handle_restart_command))
     application.add_handler(CommandHandler("memory", handle_memory_command))
+    application.add_handler(CommandHandler("shutdown", handle_shutdown_command)) # [V17.2] 비상 종료
     application.add_handler(CallbackQueryHandler(handle_memory_callback, pattern="^memory_"))
     
     # [V7.0] 시간 시계 관리 명령어 (메뉴 호출 분리)

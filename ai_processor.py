@@ -249,7 +249,7 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
             
             # [V12.25] 실시간 토큰 사용량 기록 (입력/출력)
             if response.usage_metadata:
-                log_token("Mail_Summary", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
+                log_token("Mail_Summary", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count, prompt_text=dynamic_prompt, response_text=response.text)
             
             # [V12.17] client_name이 누락되었을 경우를 대비한 기본값 설정
             if 'client_name' not in result:
@@ -311,7 +311,7 @@ def extract_skip_rule_ai(subject: str, body: str) -> str:
         
         # [V12.25] 토큰 기록
         if response.usage_metadata:
-            log_token("Skip_Rule_Analysis", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
+            log_token("Skip_Rule_Analysis", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count, prompt_text=prompt, response_text=response.text)
             
         rule = response.text.strip() if response.text else "유형 파악 불가"
         return rule
@@ -377,8 +377,8 @@ def route_intent(user_message: str) -> str:
         )
         
         # [V12.25] 토큰 기록 (라우터 전용)
-        if hasattr(response, 'usage_metadata') and response.usage_metadata:
-            log_token("Intent_Router", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
+        if response.usage_metadata:
+            log_token("Intent_Router", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count, prompt_text=prompt, response_text=response.text)
 
         result = response.text.strip().upper() if response.text else "GENERAL_CHAT"
         logger.info(f"[Intent Router] AI 판단 원본 결과: {result}")
@@ -505,7 +505,7 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
         
         # [V12.25] 토큰 기록
         if response.usage_metadata:
-            log_token("Daily_Report", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count)
+            log_token("Daily_Report", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count, prompt_text=prompt, response_text=response.text)
             
         return json.loads(_clean_ai_json(response.text))
     except Exception:
