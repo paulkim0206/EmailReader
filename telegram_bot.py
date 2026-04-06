@@ -168,6 +168,38 @@ async def send_failure_alert(application: Application, mail_data: dict):
 # [V17.0] 베트남 뉴스 RSS 전용 알림 및 요약 핸들러 (URL 매핑용)
 RSS_URL_MAP = {}
 
+def load_rss_url_map():
+    """서버 재시작 후에도 뉴스 버튼이 작동하도록 장부에서 링크 정보를 불러옵니다."""
+    global RSS_URL_MAP
+    from config import RSS_URL_MAP_FILE
+    if os.path.exists(RSS_URL_MAP_FILE):
+        try:
+            with open(RSS_URL_MAP_FILE, "r", encoding="utf-8") as f:
+                RSS_URL_MAP = json.load(f)
+            logger.info(f"📂 뉴스 링크 장부 로드 완료 ({len(RSS_URL_MAP)}건)")
+        except Exception as e:
+            logger.error(f"뉴스 장부 로드 실패: {e}")
+            RSS_URL_MAP = {}
+
+def save_rss_url_map():
+    """뉴스 링크 정보를 장부에 영구 저장합니다."""
+    from config import RSS_URL_MAP_FILE
+    try:
+        # [V17.4] 데이터 다이어트: 너무 오래된 링크(1000건 초과)는 삭제하여 파일 크기 관리
+        global RSS_URL_MAP
+        if len(RSS_URL_MAP) > 1000:
+            # 가장 오래된 키부터 삭제 (Python 3.7+ dict 순서 보장 활용)
+            keys_to_remove = list(RSS_URL_MAP.keys())[:200]
+            for k in keys_to_remove: del RSS_URL_MAP[k]
+            
+        with open(RSS_URL_MAP_FILE, "w", encoding="utf-8") as f:
+            json.dump(RSS_URL_MAP, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.error(f"뉴스 장부 저장 실패: {e}")
+
+# 시작 시 장부 로드
+load_rss_url_map()
+
 async def send_rss_alert(application, item):
     """베트남 뉴스 속보 알림을 전송합니다."""
     import hashlib
@@ -175,7 +207,10 @@ async def send_rss_alert(application, item):
     
     url = item.get('link', '')
     url_hash = hashlib.md5(url.encode()).hexdigest()[:10]
+    
+    # [V17.4] 링크 맵핑 저장 및 장부 업데이트
     RSS_URL_MAP[url_hash] = url
+    save_rss_url_map()
     
     from ai_processor import translate_news_title
     
