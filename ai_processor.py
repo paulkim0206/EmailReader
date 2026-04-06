@@ -151,8 +151,6 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
             "status": "요약",
             "is_ai_error": False,
             "is_thread": False,
-            "thread_key": subject,
-            "thread_index": 1,
             "client_name": sender,
             "summary": f"<b>[첨부파일 메일]</b> 본문 없이 첨부파일만 수신됨."
         }
@@ -324,8 +322,7 @@ def extract_skip_rule_ai(subject: str, body: str) -> str:
 def _fallback_response():
     """[V12.7] 실시간 시도가 모두 실패했을 때 부장님께 드리는 전문적인 보고"""
     return {
-        "status": "알림", "is_ai_error": True, "is_thread": False, "thread_key": "일시적 지연",
-        "thread_index": 1, 
+        "status": "알림", "is_ai_error": True, "is_thread": False,
         "summary": "⚠️ <b>[피아니 일시 지연]</b> AI 서버 응답 지연으로 실시간 분석을 중단했습니다. 5분 뒤 배경에서 마지막 1회 추가 요약 시도를 진행하겠습니다."
     }
 

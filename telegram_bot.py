@@ -291,15 +291,16 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             # [V12.16] 재분석 시작됨을 알림
             await query.answer(text="⏳ 재분석을 시작합니다...")
             from ai_processor import process_email_with_ai
-            from thread_manager import format_threads_for_prompt
-            history = format_threads_for_prompt()
             
-            new_ai_result = await asyncio.to_thread(process_email_with_ai, mail_data, history, force_summarize=True)
+            # [V14.0/V15.0 Stateless] 더 이상 과거 장부(history)를 억지로 주입하지 않습니다.
+            new_ai_result = await asyncio.to_thread(process_email_with_ai, mail_data, [], force_summarize=True)
             
             # 분석 완료 시 알림 및 장부 기록
-            from thread_manager import save_thread_entry
-            await send_email_alert(context.application, mail_data, new_ai_result, {}, mail_data.get('subject'))
-            save_thread_entry(new_ai_result.get('thread_key'), new_ai_result.get('thread_index'), new_ai_result.get('summary'), None, uid, new_ai_result.get('client_name'))
+            from thread_manager import save_summary_entry
+            await send_email_alert(context.application, mail_data, new_ai_result, {}, mail_data.get('subject', ''))
+            
+            # [V15.0 Flat DB] 오래된 부장님 버튼 버그(save_thread_entry) 해결 완료!
+            save_summary_entry(uid, mail_data.get('subject', ''), new_ai_result.get('summary', ''), None, new_ai_result.get('client_name'))
             
             try: await query.edit_message_reply_markup(reply_markup=None)
             except Exception: pass
