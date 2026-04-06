@@ -206,6 +206,11 @@ def get_text_from_email(msg):
     # 혹시 남아있을지도 모르는 원본 데이터 찌꺼기(--None 등) 정교하게 청소
     final_text = re.sub(r'--\w+|Content-Type:.*|Content-Transfer-Encoding:.*', '', final_text)
     
+    # [방어막 1단계] 기계어로 된 폭탄 스팸메일 대비: 최대 글자 수 강제 제한 (1만 자)
+    if final_text and len(final_text) > 10000:
+        logger.warning(f"⚠️ 본문 텍스트가 비정상적으로 깁니다 ({len(final_text)}자). 토큰 폭탄 방지를 위해 강제 절단합니다.")
+        final_text = final_text[:10000] + "\n\n... (원문이 너무 길어 이하 생략됨)"
+        
     return final_text if final_text.strip() else "본문 추출 불가 메일"
 
 def decode_payload(payload, charset):

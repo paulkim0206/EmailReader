@@ -161,7 +161,7 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
     # 띄어쓰기 한 칸 없이 500자 이상의 영문/숫자/기호가 이어지면 '기계어'로 판단하여 차단합니다.
     if re.search(r'[A-Za-z0-9+/]{500,}', email_body):
         return {
-            "status": "알림", "is_ai_error": True, "summary": "⚠️ <b>[토큰 보호]</b> 해독되지 않은 대량의 데이터(Base64)가 감지되어 AI 분석을 차단했습니다. 직접 확인이 필요합니다."
+            "status": "알림", "is_ai_error": False, "summary": "⚠️ <b>[기계어/비정상 데이터]</b> 분석 불가능한 코드(Base64)가 포함되어 AI 요약을 건너뜁니다. 원본을 직접 확인해주세요."
         }
 
     # 1. [V12.13] 이미 조립된 '완성형 지침서'를 즉시 가져옵니다.
