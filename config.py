@@ -98,6 +98,7 @@ PROCESSED_RSS_FILE = os.path.join(DATA_DIR, "processed_rss.txt") # 뉴스 중복
 # [V17.2] AI 토큰 세이프가드 (비용 폭탄 방지 시스템)
 TOKEN_ALERT_THRESHOLD = 10000 # 한 번의 AI 호출당 경고 임계값
 HIGH_TOKEN_REPORTS_DIR = os.path.join(DATA_DIR, "high_token_reports")
+HIGH_TOKEN_LOG_FILE = os.path.join(HIGH_TOKEN_REPORTS_DIR, "high_token_guard_log.txt")
 os.makedirs(HIGH_TOKEN_REPORTS_DIR, exist_ok=True)
 
 # [V17.4] 뉴스 링크 맵핑 보관 장부 (서버 재시작 대응)

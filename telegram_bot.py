@@ -367,6 +367,27 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             )
         return
 
+    # [V17.5] 고비용 통합 장부 다운로드 처리
+    elif data == "token_log_download":
+        from config import HIGH_TOKEN_LOG_FILE
+        if os.path.exists(HIGH_TOKEN_LOG_FILE):
+            await query.answer("📂 통합 진단 장부를 전송합니다...")
+            try:
+                with open(HIGH_TOKEN_LOG_FILE, 'rb') as f:
+                    await context.bot.send_document(
+                        chat_id=query.message.chat_id,
+                        document=f,
+                        filename="high_token_guard_log.txt",
+                        caption="🛡️ <b>[AI 토큰 세이프가드]</b> 통합 진행 장부입니다.",
+                        parse_mode="HTML"
+                    )
+            except Exception as e:
+                logger.error(f"장부 전송 실패: {e}")
+                await query.answer("🚨 파일 전송 중 오류가 발생했습니다.", show_alert=True)
+        else:
+            await query.answer("⚠️ 아직 기록된 고비용 로그가 없습니다.", show_alert=True)
+        return
+
     # [V16.9] 수첩(노트) 인라인 인터페이스 핸들러
     elif data.startswith("memo_"):
         if data == "memo_main":

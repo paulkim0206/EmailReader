@@ -46,23 +46,21 @@ def log_token(task, prompt_tokens, candidate_tokens, prompt_text=None, response_
 
         # [V17.2] 1만 토큰 초과 시 정밀 진단 리포트 생성
         is_high_token = total_tokens >= TOKEN_ALERT_THRESHOLD
-        report_path = ""
         if is_high_token and prompt_text:
-            filename = f"report_{now.strftime('%Y%m%d_%H%M%S')}_{task}.txt"
-            report_path = os.path.join(HIGH_TOKEN_REPORTS_DIR, filename)
+            from config import HIGH_TOKEN_LOG_FILE
             try:
-                with open(report_path, "w", encoding="utf-8") as rf:
-                    rf.write(f"⚠️ [고비용 AI 호출 정밀 진단 리포트] ⚠️\n")
-                    rf.write(f"일시: {now.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    rf.write(f"작업명: {task}\n")
-                    rf.write(f"사용량: {total_tokens} (In: {prompt_tokens}, Out: {candidate_tokens})\n")
-                    rf.write(f"{'='*50}\n\n")
+                # [V17.5] 개별 파일이 아닌 하나의 통합 파일에 '누적 기록' 합니다.
+                with open(HIGH_TOKEN_LOG_FILE, "a", encoding="utf-8") as rf:
+                    rf.write(f"\n{'='*60}\n")
+                    rf.write(f"⚠️ [비상: 고비용 AI 호출 기록] {now.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                    rf.write(f"작업명: {task} | 사용량: {total_tokens:,} (In: {prompt_tokens:,}, Out: {candidate_tokens:,})\n")
+                    rf.write(f"{'-'*60}\n")
                     rf.write(f"[1. AI 지침 및 입력 원문]\n{prompt_text}\n\n")
-                    rf.write(f"{'-'*50}\n\n")
                     rf.write(f"[2. AI 답변 원문]\n{response_text}\n")
-                logger.warning(f"🚨 고비용 리포트 생성 완료: {report_path}")
+                    rf.write(f"{'='*60}\n")
+                logger.warning(f"🚨 통합 고비용 장부에 기록 완료: {HIGH_TOKEN_LOG_FILE}")
             except Exception as re:
-                logger.error(f"리포트 생성 중 오류: {re}")
+                logger.error(f"통합 장부 기록 중 오류: {re}")
 
         # [V12.30] 실시간 텔레그램 토큰 사용량 직통 알림 발송 (동기식)
         try:
@@ -76,24 +74,34 @@ def log_token(task, prompt_tokens, candidate_tokens, prompt_text=None, response_
                 "Skip_Rule_Analysis": "🏠 스킵 규칙 추출",
                 "Daily_Report": "📅 일일 비즈니스 보고 생성",
                 "Weekly_Report": "📊 주간 통합 보고 생성",
-                "News_Summary": "📰 뉴스 속보 요약"
+                "News_Summary": "📰 뉴스 속보 요약",
+                "News_Title_Translation": "🌐 뉴스 제목 번역"
             }.get(task, task)
             
+            # [V17.5] 텔레그램 경보 메시지 페이로드 구성
+            msg_data = {"chat_id": TELEGRAM_CHAT_ID, "parse_mode": "HTML"}
+            
             if is_high_token:
-                msg = (
+                msg_data["text"] = (
                     f"🚨 <b>[토큰 사용량 레드라인 경보]</b> 🚨\n\n"
                     f"🎯 <b>위험 작업:</b> {task_kr}\n"
                     f"🔥 <b>총 사용량: {total_tokens:,} 토큰</b>\n"
                     f"📥 입력: {prompt_tokens:,} / 📤 출력: {candidate_tokens:,}\n\n"
-                    f"📢 <b>부장님!</b> 단일 호출 비용이 설정치({TOKEN_ALERT_THRESHOLD})를 초과했습니다.\n"
-                    f"방금 생성된 <code>{os.path.basename(report_path)}</code> 리포트를 확인하시거나, "
-                    f"비정상 동작으로 보이면 <b>/shutdown</b> 명령어로 서버를 멈춰주세요! 🔌"
+                    f"📢 <b>부장님!</b> 단일 호출 비용이 1만 토큰을 초과했습니다.\n"
+                    f"아래 [다운로드] 버튼을 눌러 통합 진단 장부를 확인하시거나, "
+                    f"비정상 동작이면 <b>/shutdown</b> 명령어로 전원을 차단하십시오! 🔌"
                 )
+                # [V17.5] 인라인 버튼 추가 (JSON 형식)
+                msg_data["reply_markup"] = {
+                    "inline_keyboard": [[
+                        {"text": "📄 통합 진단 장부 다운로드", "callback_data": "token_log_download"}
+                    ]]
+                }
             else:
-                msg = f"🪙 <b>[실시간 토큰 알림]</b>\n\n🎯 <b>작업:</b> {task_kr}\n📥 <b>입력:</b> {prompt_tokens or 0} 토큰\n📤 <b>출력:</b> {candidate_tokens or 0} 토큰"
+                msg_data["text"] = f"🪙 <b>[실시간 토큰 알림]</b>\n\n🎯 <b>작업:</b> {task_kr}\n📥 <b>입력:</b> {prompt_tokens or 0} 토큰\n📤 <b>출력:</b> {candidate_tokens or 0} 토큰"
             
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-            payload = json.dumps({"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}).encode('utf-8')
+            payload = json.dumps(msg_data).encode('utf-8')
             req = url_req.Request(url, data=payload, headers={'Content-Type': 'application/json'})
             url_req.urlopen(req, timeout=3)
         except Exception as te:
