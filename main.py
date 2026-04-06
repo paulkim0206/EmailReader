@@ -11,7 +11,7 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, USER_TIMEZONE, 
 from mail_parser import fetch_recent_emails, save_processed_uid
 from ai_processor import process_email_with_ai, load_all_prompts_to_memory
 from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, escape_for_tg, send_failure_alert, clear_temp_cache
-from thread_manager import format_threads_for_prompt, save_thread_entry, get_thread_msg_id
+from thread_manager import save_thread_entry, get_thread_msg_id
 from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue, update_retry_status
 from report_manager import update_daily_report, generate_weekly_summary
 import memo_manager # [V12.29] 서버 시작 시 즉시 메모 일괄 이사(청소)를 수행하기 위해 임포트
