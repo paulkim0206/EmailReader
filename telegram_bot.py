@@ -497,13 +497,13 @@ async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
     
     # [V12.16] 부장님을 위한 '하단 고정형 스마트 메뉴' 설계 및 장착
-    keyboard = [['❓ 도움말', '📝 메모보기', '🔄 업데이트']]
+    keyboard = [['❓ 도움말', '📝 노트보기', '🔄 업데이트']]
     # resize_keyboard=True 로 하면 버튼 크기가 화면에 맞게 아주 콤팩트하고 예쁘게 조절됩니다.
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     
     await update.message.reply_text(
         "✅ 🤖 <b>비서 피아니가 정상적으로 살아있으며, 부장님의 모든 명령을 대기 중입니다!</b>\n\n"
-        "하단의 버튼을 누르시면 도움말을 보거나 메모 현황을 즉시 확인하실 수 있습니다. 👇",
+        "하단의 버튼을 누르시면 도움말을 보거나 노트 현황을 즉시 확인하실 수 있습니다. 👇",
         reply_markup=reply_markup,
         parse_mode="HTML"
     )
@@ -646,6 +646,11 @@ async def handle_memo_del_command(update: Update, context: ContextTypes.DEFAULT_
         await update.message.reply_text(f"✅ 수첩에서 [ID: {memo_id}번] 메모를 지웠습니다(완료 처리)!")
     else:
         await update.message.reply_text(f"🚨 앗! {memo_id}번 메모를 찾을 수 없습니다. (이미 존재하지 않음)")
+
+async def handle_notelist_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """[V16.2] /notelist 명령어로 노트(메모) 인라인 메뉴를 바로 호출합니다."""
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
+    await show_memo_interface(update, context)
 
 async def handle_restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -849,8 +854,8 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await handle_update_command(update, context)
         return
 
-    # [V16.0] '📝 메모보기' 버튼 인라인 인터페이스로 가로채기
-    elif user_text == "📝 메모보기":
+    # [V16.0] '📝 노트보기' 버튼 인라인 인터페이스로 가로채기
+    elif user_text == "📝 노트보기":
         await show_memo_interface(update, context)
         return
 
@@ -959,10 +964,11 @@ async def handle_memory_callback(update: Update, context: ContextTypes.DEFAULT_T
 def setup_telegram_handlers(application: Application):
     # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note', '/update' 옵션을 박아 넣습니다.
     application.add_handler(CommandHandler("status", command_status))
+    application.add_handler(CommandHandler("help", handle_help_command)) # [V16.3] /help 명령어 누락 복구
     application.add_handler(CommandHandler("note", handle_memo_command))
     application.add_handler(CommandHandler("notedel", handle_memo_del_command))
     application.add_handler(CommandHandler("notebackup", handle_export_backup_notes))
-    application.add_handler(CommandHandler("notelist", handle_export_backup_notes))
+    application.add_handler(CommandHandler("notelist", handle_notelist_command))
     application.add_handler(CommandHandler("update", handle_update_command))
     application.add_handler(CommandHandler("restart", handle_restart_command))
     application.add_handler(CommandHandler("memory", handle_memory_command))
