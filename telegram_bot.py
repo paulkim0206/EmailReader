@@ -165,7 +165,7 @@ async def send_failure_alert(application: Application, mail_data: dict):
     except Exception as e:
         logger.error(f"최종 실패 알림 전송 실패: {e}")
 
-async def show_memo_interface(update: Update, context: ContextTypes.DEFAULT_TYPE, is_edit: bool = False, query=None):
+async def show_memo_interface(update: Update, context: ContextTypes.DEFAULT_TYPE, is_edit: bool = False, query=None, view_mode="main"):
     """[V16.0] 파이썬으로 수첩 내용을 빠르게 불러와 인라인 버튼 형태로 구성"""
     from memo_manager import get_active_memos_list
     memos = get_active_memos_list()
@@ -179,9 +179,29 @@ async def show_memo_interface(update: Update, context: ContextTypes.DEFAULT_TYPE
             memo_id = memo.get('id', '?')
             safe_content = escape_for_tg(memo['content'])
             msg += f"🔸 <b>{idx}. (ID: {memo_id}번)</b>\n{safe_content}\n\n"
-            keyboard.append([InlineKeyboardButton(f"✅ {idx}번 완료/삭제", callback_data=f"memo_del_{memo_id}")])
             
-    keyboard.append([InlineKeyboardButton("➕ 새 메모 작성 방법 보기", callback_data="memo_add")])
+    if view_mode == "main":
+        if memos:
+            keyboard.append([
+                InlineKeyboardButton("➕ 메모 추가", callback_data="memo_add"),
+                InlineKeyboardButton("✅ 메모 완료", callback_data="memo_del_menu")
+            ])
+        else:
+            keyboard.append([InlineKeyboardButton("➕ 메모 추가", callback_data="memo_add")])
+            
+    elif view_mode == "delete_menu":
+        msg += "\n🗑 <b>완료 처리할(지울) 메모의 번호(ID)를 선택하세요.</b>"
+        row = []
+        for memo in memos:
+            memo_id = memo.get('id', '?')
+            row.append(InlineKeyboardButton(f"[{memo_id}]", callback_data=f"memo_del_{memo_id}"))
+            if len(row) >= 5:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("🔙 뒤로 가기", callback_data="memo_main")])
+            
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     if is_edit and query:
@@ -211,19 +231,29 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer(text="⚠️ 해당 기능(메일 원본 저장)은 부장님 지시로 폐지되었습니다.", show_alert=True)
         return
 
-    # [V16.0] 초고속 인라인 메모 관리 기능
-    elif data.startswith("memo_del_"):
-        memo_id = int(data.split("_")[2])
-        from memo_manager import delete_memo
-        if delete_memo(memo_id):
-            await query.answer(text="✅ 해당 메모를 완료(삭제) 처리했습니다!", show_alert=False)
-            await show_memo_interface(update, context, is_edit=True, query=query)
-        else:
-            await query.answer(text="🚨 삭제 실패: 상태를 확인해주세요.", show_alert=True)
-        return
-
-    elif data == "memo_add":
-        await query.answer(text="💡 안내: 채팅창에 '/note 메모내용' 또는 '/메모 메모내용'을 입력하시면 즉시 기록됩니다!", show_alert=True)
+    # [V16.1] 초고속 인라인 메모 관리 기능 (봇파더 스타일 전환형 메뉴)
+    elif data.startswith("memo_"):
+        if data == "memo_main":
+            await show_memo_interface(update, context, is_edit=True, query=query, view_mode="main")
+        elif data == "memo_del_menu":
+            await show_memo_interface(update, context, is_edit=True, query=query, view_mode="delete_menu")
+        elif data.startswith("memo_del_"):
+            memo_id = int(data.split("_")[2])
+            from memo_manager import delete_memo
+            if delete_memo(memo_id):
+                await query.answer(text="✅ 해당 메모를 완료(삭제) 처리했습니다!", show_alert=False)
+                # 삭제 후 다시 삭제 메뉴 그대로 보여주기
+                await show_memo_interface(update, context, is_edit=True, query=query, view_mode="delete_menu")
+            else:
+                await query.answer(text="🚨 삭제 실패: 상태를 확인해주세요.", show_alert=True)
+        elif data == "memo_add":
+            from telegram import ForceReply
+            await query.answer()
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text="📝 새로 추가할 메모 내용을 하단에 적어주세요. (이 메시지에 대한 답장 형태)",
+                reply_markup=ForceReply(selective=True)
+            )
         return
 
     # [새로운 분기 1] 부장님의 "이건 보고서에 넣어!" 명령 (핀 버튼)
@@ -594,6 +624,29 @@ async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"메모 기록 중 치명적인 에러 발생: {e}")
         await update.message.reply_text(f"🚨 앗! 하드디스크에 메모를 찍으려고 했는데 오류가 발생했습니다.\n[원인]: {e}")
+
+async def handle_memo_del_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V16.1] /notedel [숫자] 명령어로 바로 특정 메모를 지우는 기능
+    """
+    chat_id = str(update.message.chat_id)
+    if chat_id != ALLOWED_CHAT_ID:
+        return
+
+    text = update.message.text
+    match = re.search(r'^/notedel\s+(\d+)', text, flags=re.IGNORECASE)
+    
+    if not match:
+        await update.message.reply_text("🤔 부장님! 완료할(지울) 메모의 번호(ID)를 같이 적어주세요!\n👉 예시: /notedel 3")
+        return
+
+    memo_id = int(match.group(1))
+    from memo_manager import delete_memo
+    if delete_memo(memo_id):
+        await update.message.reply_text(f"✅ 수첩에서 [ID: {memo_id}번] 메모를 지웠습니다(완료 처리)!")
+    else:
+        await update.message.reply_text(f"🚨 앗! {memo_id}번 메모를 찾을 수 없습니다. (이미 존재하지 않음)")
+
 async def handle_restart_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     [V12.20] 사용자 요청에 의한 즉시 재부팅 명령어입니다.
@@ -774,6 +827,17 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     user_text = update.message.text
     
+    # [V16.1] ForceReply 기반 메모 추가 기능 (답장 감지)
+    if update.message.reply_to_message and "새로 추가할 메모 내용을 하단에 적어주세요" in update.message.reply_to_message.text:
+        from memo_manager import save_memo
+        memo_content = user_text.strip()
+        if save_memo(memo_content):
+            await update.message.reply_text(f"✅ 성공적으로 새 메모가 수첩에 등록되었습니다!\n\n내용: {memo_content}")
+            await show_memo_interface(update, context, view_mode="main") # 리스트 갱신 출력
+        else:
+            await update.message.reply_text("🚨 메모 저장 중 오류가 발생했습니다.")
+        return
+
     # [V12.0] 하단 고정 메뉴 감지
     if user_text == "❓ 도움말":
         # 도움말은 기계적인 나열이므로 0.1초 만에 파이썬이 즉각 응답합니다.
@@ -896,6 +960,7 @@ def setup_telegram_handlers(application: Application):
     # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note', '/update' 옵션을 박아 넣습니다.
     application.add_handler(CommandHandler("status", command_status))
     application.add_handler(CommandHandler("note", handle_memo_command))
+    application.add_handler(CommandHandler("notedel", handle_memo_del_command))
     application.add_handler(CommandHandler("notebackup", handle_export_backup_notes))
     application.add_handler(CommandHandler("notelist", handle_export_backup_notes))
     application.add_handler(CommandHandler("update", handle_update_command))
