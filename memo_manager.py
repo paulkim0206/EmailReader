@@ -194,6 +194,15 @@ def get_active_memos_text() -> str:
     except Exception as e:
         return f"🚨 미완료 수첩 읽기 실패: {e}"
 
+def get_active_memos_list() -> list:
+    """[V16.0] 텔레그램 인라인 버튼 생성을 위해 활성 메모만 리스트로 반환합니다."""
+    try:
+        notes = _load_notes()
+        return [n for n in notes if n.get('status') == 'active']
+    except Exception as e:
+        logger.error(f"메모 리스트 읽기 실패: {e}")
+        return []
+
 def get_all_memos() -> str:
     """`/notelist` 명령어 발동 시, 현재 장부를 텍스트로 뽑아냅니다. (이사 완료된 항목은 내용 제외)"""
     notes = _load_notes()

@@ -165,6 +165,33 @@ async def send_failure_alert(application: Application, mail_data: dict):
     except Exception as e:
         logger.error(f"최종 실패 알림 전송 실패: {e}")
 
+async def show_memo_interface(update: Update, context: ContextTypes.DEFAULT_TYPE, is_edit: bool = False, query=None):
+    """[V16.0] 파이썬으로 수첩 내용을 빠르게 불러와 인라인 버튼 형태로 구성"""
+    from memo_manager import get_active_memos_list
+    memos = get_active_memos_list()
+    
+    keyboard = []
+    if not memos:
+        msg = "📝 <b>현재 활성화된 메모가 없습니다! 수첩이 아주 깨끗합니다 ✨</b>"
+    else:
+        msg = "📝 <b>[부장님의 미완료 수첩 목록]</b>\n\n"
+        for idx, memo in enumerate(memos, 1):
+            memo_id = memo.get('id', '?')
+            safe_content = escape_for_tg(memo['content'])
+            msg += f"🔸 <b>{idx}. (ID: {memo_id}번)</b>\n{safe_content}\n\n"
+            keyboard.append([InlineKeyboardButton(f"✅ {idx}번 완료/삭제", callback_data=f"memo_del_{memo_id}")])
+            
+    keyboard.append([InlineKeyboardButton("➕ 새 메모 작성 방법 보기", callback_data="memo_add")])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    if is_edit and query:
+        try:
+            await query.edit_message_text(text=msg, parse_mode="HTML", reply_markup=reply_markup)
+        except Exception:
+            pass
+    else:
+        await update.message.reply_text(text=msg, parse_mode="HTML", reply_markup=reply_markup)
+
 async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     사용자가 텔레그램 대화방에서 [마크다운 문서로 저장하기] 버튼을 띡! 눌렀을 때만 작동하는 '동작 감지기'입니다.
@@ -182,6 +209,21 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         # [V11.10] 부장님의 지시로 원본 저장 기능은 폐지되었습니다. 
         # (혹시라도 이전 메시지의 버튼을 누를 경우를 대비하여 안내를 보냅니다.)
         await query.answer(text="⚠️ 해당 기능(메일 원본 저장)은 부장님 지시로 폐지되었습니다.", show_alert=True)
+        return
+
+    # [V16.0] 초고속 인라인 메모 관리 기능
+    elif data.startswith("memo_del_"):
+        memo_id = int(data.split("_")[2])
+        from memo_manager import delete_memo
+        if delete_memo(memo_id):
+            await query.answer(text="✅ 해당 메모를 완료(삭제) 처리했습니다!", show_alert=False)
+            await show_memo_interface(update, context, is_edit=True, query=query)
+        else:
+            await query.answer(text="🚨 삭제 실패: 상태를 확인해주세요.", show_alert=True)
+        return
+
+    elif data == "memo_add":
+        await query.answer(text="💡 안내: 채팅창에 '/note 메모내용' 또는 '/메모 메모내용'을 입력하시면 즉시 기록됩니다!", show_alert=True)
         return
 
     # [새로운 분기 1] 부장님의 "이건 보고서에 넣어!" 명령 (핀 버튼)
@@ -642,39 +684,7 @@ async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.
         ai_reply = re.sub(r'\[\[LEARN\]\].*?\[\[/LEARN\]\]', '', ai_reply, flags=re.DOTALL).strip()
         ai_reply += f"\n\n*(✅ 비서가 방금 지적하신 {len(learn_matches)}건의 내용을 [오답 사례 세트]로 학습했습니다!)*"
 
-    # 2. 메모(수첩) 저장 태그 (다중 처리 지원)
-    memo_matches = list(re.finditer(r'\[\[SAVE_MEMO\]\](.*?)\[\[/SAVE_MEMO\]\]', ai_reply, re.DOTALL))
-    for match in memo_matches:
-        from memo_manager import save_memo
-        save_memo(match.group(1).strip())
-    if memo_matches:
-        ai_reply = re.sub(r'\[\[SAVE_MEMO\]\].*?\[\[/SAVE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
 
-    # 3. 메모 삭제 태그 (다중 처리 지원 - 부장님 버그 리포트 해결)
-    del_matches = list(re.finditer(r'\[\[DELETE_MEMO\]\](.*?)\[\[/DELETE_MEMO\]\]', ai_reply, re.DOTALL))
-    for match in del_matches:
-        try:
-            target_id = int(match.group(1).strip())
-            from memo_manager import delete_memo
-            delete_memo(target_id)
-        except ValueError: pass
-    if del_matches:
-        ai_reply = re.sub(r'\[\[DELETE_MEMO\]\].*?\[\[/DELETE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
-
-    # 4. 메모 업데이트 태그 (다중 처리 지원)
-    upd_matches = list(re.finditer(r'\[\[UPDATE_MEMO\]\](.*?)\[\[/UPDATE_MEMO\]\]', ai_reply, re.DOTALL))
-    for match in upd_matches:
-        payload = match.group(1).strip()
-        if "|" in payload:
-            try:
-                parts = payload.split('|', 1)
-                target_id = int(parts[0].strip())
-                new_content = parts[1].strip()
-                from memo_manager import update_memo
-                update_memo(target_id, new_content)
-            except ValueError: pass
-    if upd_matches:
-        ai_reply = re.sub(r'\[\[UPDATE_MEMO\]\].*?\[\[/UPDATE_MEMO\]\]', '', ai_reply, flags=re.DOTALL).strip()
 
     # 5. 온디맨드 보고서 생성 태그 (이 항목은 보통 1개씩 처리되지만 일관성을 유지)
     daily_report_match = re.search(r"\[\[GENERATE_DAILY_REPORT\]\]\s*(.*?)\s*\[\[/GENERATE_DAILY_REPORT\]\]", ai_reply)
@@ -775,8 +785,10 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await handle_update_command(update, context)
         return
 
-    # [중요] '📝 메모보기' 버튼은 별도로 가로채지 않습니다. 
-    # 부장님의 지시대로 피아니(AI)가 직접 뇌를 써서 미완료 업무만 브리핑하도록 대화 흐름을 유지합니다.
+    # [V16.0] '📝 메모보기' 버튼 인라인 인터페이스로 가로채기
+    elif user_text == "📝 메모보기":
+        await show_memo_interface(update, context)
+        return
 
     # [대수술] 이전의 '무조건적인 사용자 기록(save_chat_log)' 로직을 삭제했습니다.
     # 의도 파악이 끝난 후 GENERAL_CHAT 일때 한꺼번에 기록합니다.
@@ -799,24 +811,18 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
         use_memos = False
         use_history = True
         
-        if intent == "MEMO_WORK":
-            use_memos = True
-            use_history = False # 메모 작업에는 일상 대화가 필요 없습니다.
-        elif intent in ["REPORT_WORK", "MAIL_WORK"]:
-            use_memos = False
+        if intent in ["REPORT_WORK", "MAIL_WORK"]:
             use_history = False # 보고/메일 작업에도 일상 대화나 수첩이 불필요합니다.
         else: # GENERAL_CHAT
-            use_memos = False
             use_history = True
             
-        logger.info(f"선택된 모드: {intent} (기억력 적용: {use_history}, 수첩 적용: {use_memos})")
+        logger.info(f"선택된 모드: {intent} (기억력 적용: {use_history})")
 
         ai_reply = await asyncio.to_thread(
             chat_with_secretary, 
             user_message=user_text, 
             replied_text=replied_text, 
             include_history=use_history,
-            include_memos=use_memos,
             intent=intent
         )
 

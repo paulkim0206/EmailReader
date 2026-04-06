@@ -335,18 +335,14 @@ def route_intent(user_message: str) -> str:
     if not GEMINI_API_KEY: return "GENERAL_CHAT"
     if not user_message: return "GENERAL_CHAT"
     
-    # [QC] 단순히 '📝 메모보기' 버튼을 누른 경우는 굳이 AI를 거칠 필요 없이 토큰 0개로 즉시 라우팅합니다.
-    if user_message.strip() == "📝 메모보기":
-        return "MEMO_WORK"
 
     prompt = (
         "너는 부장님의 지시 의도를 정확히 파악하는 초고속 의도 분석 라우터(Router)다.\n"
         "다음 사용자의 메시지를 읽고, 오직 아래 4가지 영문 카테고리 이름 중 하나만 결과로 출력하라. (설명, 인사말 등 다른 말은 절대 금지)\n\n"
         "[카테고리]\n"
         "1. MAIL_WORK : 이메일 요약, 메일 수신 확인, 스킵 이유 등 메일과 관련된 질문\n"
-        "2. MEMO_WORK : 수첩 목록 확인, 메모 내용 저장/삭제/수정, 특정 항목 완료 지시\n"
-        "3. REPORT_WORK : 일일 보고서, 주간 보고서 생성 요청\n"
-        "4. GENERAL_CHAT : 일상적인 인사, 안부, 궁금증, 잡담, 칭찬, 비서 자체와의 대화\n\n"
+        "2. REPORT_WORK : 일일 보고서, 주간 보고서 생성 요청\n"
+        "3. GENERAL_CHAT : 일상적인 인사, 안부, 궁금증, 잡담, 칭찬, 비서 자체와의 대화\n\n"
         f"대상 메시지: {user_message[:500]}\n"
         "정답 카테고리:"
     )
@@ -388,7 +384,6 @@ def route_intent(user_message: str) -> str:
         logger.info(f"[Intent Router] AI 판단 원본 결과: {result}")
         
         if "MAIL" in result: return "MAIL_WORK"
-        elif "MEMO" in result: return "MEMO_WORK"
         elif "REPORT" in result: return "REPORT_WORK"
         else: return "GENERAL_CHAT"
         
@@ -396,7 +391,7 @@ def route_intent(user_message: str) -> str:
         logger.error(f"의도 분류 중 오류 (기본값 GENERAL_CHAT 설정): {e}")
         return "GENERAL_CHAT"
 
-def chat_with_secretary(user_message: str, replied_text: str = None, include_history: bool = True, include_memos: bool = False, intent: str = "GENERAL_CHAT") -> str:
+def chat_with_secretary(user_message: str, replied_text: str = None, include_history: bool = True, intent: str = "GENERAL_CHAT") -> str:
     """
     [V12.16] 초고성능 실시간 기억력 이식 (True Multi-turn API 적용)
     [V13.0] 프롬프트 기능 분할 수술 적용 (동적 어빌리티 로딩)
@@ -407,19 +402,9 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
     chat_prompt = _read_prompt_file("peani_persona.txt")
     
     # [새로운 아키텍처] 의도(Intent)에 따라 필요한 '기능형 스위치 프롬프트'만 이식하여 토큰을 절약합니다!
-    if intent == "MEMO_WORK":
-        chat_prompt += f"\n\n{load_ability('memo_trigger')}"
-    elif intent == "REPORT_WORK":
+    if intent == "REPORT_WORK":
         chat_prompt += f"\n\n{load_ability('report_trigger')}"
         
-    # 2. 고정 지식(수첩/시간) 주입
-    if include_memos:
-        try:
-            from memo_manager import get_active_memos_text
-            chat_prompt += f"\n\n[부장님 수첩 현황]\n{get_active_memos_text()}"
-        except Exception: pass
-
-
     chat_prompt += _get_now_info()
 
     # 3. 답장(Reply) 시 맥락 강조 (부장님이 무엇에 대해 말씀하시는지 인지력 강화)
