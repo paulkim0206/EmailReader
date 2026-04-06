@@ -177,10 +177,16 @@ async def send_rss_alert(application, item):
     url_hash = hashlib.md5(url.encode()).hexdigest()[:10]
     RSS_URL_MAP[url_hash] = url
     
-    title = item.get('title', '제목 없음')
+    from ai_processor import translate_news_title
+    
+    title_vi = item.get('title', '제목 없음')
+    # [V17.3] 제목 실시간 한국어 번역 실행
+    title_ko = await asyncio.to_thread(translate_news_title, title_vi)
+    
     msg = (
         f"🇻🇳 <b>[베트남 뉴스 속보]</b>\n\n"
-        f"📰 <b>{escape_for_tg(title)}</b>\n\n"
+        f"🇰🇷 <b>{escape_for_tg(title_ko)}</b>\n"
+        f"🇻🇳 <i>{escape_for_tg(title_vi)}</i>\n\n"
         f"<i>({item.get('pub_date', '')})</i>"
     )
     

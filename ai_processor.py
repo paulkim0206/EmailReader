@@ -319,6 +319,26 @@ def extract_skip_rule_ai(subject: str, body: str) -> str:
         logger.error(f"스킵 규칙 추출 중 오류: {e}")
         return "분석 중 오류 발생"
 
+def translate_news_title(vi_title: str) -> str:
+    """베트남어 뉴스 제목을 한국어로 신속하게 번역합니다."""
+    if not vi_title: return "제목 없음"
+    
+    prompt = (
+        f"너는 베트남어-한국어 전문 번역가다.\n"
+        f"다음 베트남 뉴스 제목을 한국어로 자연스럽고 간결하게 번역하라.\n\n"
+        f"제목: {vi_title}\n\n"
+        f"결론은 번역된 제목만 딱 한 줄로 말하라."
+    )
+    
+    try:
+        # [V17.3] 제목 번역은 가볍고 빠르게 처리
+        summary = _get_ai_response(prompt)
+        log_token(AI_MODEL, prompt, summary, task_id="News_Title_Translation", prompt_text=prompt, response_text=summary)
+        return summary.strip()
+    except Exception as e:
+        logger.warning(f"뉴스 제목 번역 실패: {e}")
+        return vi_title # 실패 시 원문이라도 반환
+
 def _fallback_response():
     """[V12.7] 실시간 시도가 모두 실패했을 때 부장님께 드리는 전문적인 보고"""
     return {
