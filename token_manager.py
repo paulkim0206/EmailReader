@@ -163,6 +163,8 @@ def get_daily_token_report_message(target_date=None):
         "Skip_Rule_Analysis": "🏠 스킵(제외) 규칙 추출",
         "Daily_Report": "📅 일일 비즈니스 보고서 생성",
         "Weekly_Report": "📊 주간 통합 보고서 생성",
+        "News_Summary": "📰 뉴스 속보 요약",
+        "News_Title_Translation": "🌐 뉴스 제목 번역",
         "Unknown": "❓ 기타 작업"
     }
 
