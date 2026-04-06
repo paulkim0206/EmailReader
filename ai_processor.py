@@ -101,6 +101,15 @@ def _get_now_info():
     except Exception:
         return f"\n\n[현재 시각 정보 없음]"
 
+def _get_ai_response(prompt: str) -> str:
+    """AI에게 질문을 던지고 텍스트로만 깔끔하게 답변을 받아오는 간이 통로입니다."""
+    client = _get_ai_client()
+    if not client: return ""
+    try:
+        response = client.models.generate_content(model=AI_MODEL, contents=prompt)
+        return response.text if response.text else ""
+    except Exception: return ""
+
 def _clean_ai_json(text):
     """AI 응답에서 불필요한 마크다운 기호(```json 등)를 제거하고 순수 JSON만 추출"""
     if not text: return ""
@@ -338,6 +347,53 @@ def translate_news_title(vi_title: str) -> str:
     except Exception as e:
         logger.warning(f"뉴스 제목 번역 실패: {e}")
         return vi_title # 실패 시 원문이라도 반환
+
+def summarize_news_article(url: str) -> str:
+    """베트남 뉴스 웹페이지 본문을 긁어와 AI로 요약 보고서를 생성합니다."""
+    import requests
+    from bs4 import BeautifulSoup
+    
+    if not url: return "❌ 기사 링크가 올바르지 않습니다."
+    
+    try:
+        # 뉴스 본문 스크래핑 (VnExpress 특화)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.encoding = 'utf-8'
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        # 기사 제목과 본문 추출
+        title = soup.find('h1', class_='title-detail')
+        title_text = title.get_text().strip() if title else ""
+        content_tags = soup.find_all('p', class_='description') + soup.find_all('p', class_='Normal')
+        article_text = "\n".join([p.get_text().strip() for p in content_tags])
+        
+        if not article_text:
+            return "❌ 기사 본문 내용을 추출할 수 없습니다. (사이트 구조 변경 가능성)"
+
+        # [V17.8] 피아니 정체성 및 현재 시각 정보 이식
+        persona = _read_prompt_file('peani_persona.txt')
+        now_info = _get_now_info()
+        ability_prompt = load_ability('news_summarizer')
+        
+        prompt = (
+            f"{persona}\n\n"
+            f"{ability_prompt}\n"
+            f"{now_info}\n\n"
+            f"대상 기사 URL: {url}\n"
+            f"기사 제목: {title_text}\n"
+            f"기사 본문:\n{article_text[:5000]}" # 5천자 제한 (토건 보호)
+        )
+        
+        # [V17.6] 복구된 AI 통로 이용
+        summary = _get_ai_response(prompt)
+        # [V17.2] 토큰 상세 기록 추가
+        log_token("News_Summary", 0, 0, prompt_text=prompt, response_text=summary)
+        
+        return summary.strip() if summary else "❌ AI가 기사를 분석하지 못했습니다."
+    except Exception as e:
+        logger.error(f"뉴스 요약 처리 중 오류: {e}")
+        return "❌ 기사 본문을 분석하는 중에 오류가 발생했습니다."
 
 def _fallback_response():
     """[V12.7] 실시간 시도가 모두 실패했을 때 부장님께 드리는 전문적인 보고"""
