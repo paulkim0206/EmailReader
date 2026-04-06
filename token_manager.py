@@ -48,6 +48,30 @@ def log_token(task, prompt_tokens, candidate_tokens):
             
         logger.info(f"🪙 토큰 기록 완료: {task} (In: {prompt_tokens}, Out: {candidate_tokens})")
 
+        # [V12.30] 부장님 지시: 실시간 텔레그램 토큰 사용량 직통 알림 발송 (동기식)
+        try:
+            from urllib import request as url_req
+            from urllib import error
+            from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+            
+            # 기능을 부장님이 이해하기 쉽게 한글로 예쁘게 포장합니다.
+            task_kr = {
+                "Mail_Summary": "새 이메일 요약",
+                "Intent_Router": "의도 분석 라우터",
+                "Secretary_Chat": "비서와의 지능형 대화",
+                "Skip_Rule_Analysis": "스킵(제외) 규칙 추출",
+                "Daily_Report": "일일 비즈니스 보고서 생성",
+                "Weekly_Report": "주간 통합 보고서 생성"
+            }.get(task, task)
+            
+            msg = f"🪙 <b>[실시간 토큰 알림]</b>\n\n🎯 <b>작업:</b> {task_kr}\n📥 <b>입력:</b> {prompt_tokens or 0} 토큰\n📤 <b>출력:</b> {candidate_tokens or 0} 토큰"
+            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+            payload = json.dumps({"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "HTML"}).encode('utf-8')
+            req = url_req.Request(url, data=payload, headers={'Content-Type': 'application/json'})
+            url_req.urlopen(req, timeout=3)
+        except Exception as te:
+            logger.error(f"실시간 토큰 텔레그램 알림 전송 실패: {te}")
+
     except Exception as e:
         logger.error(f"토큰 장부 기록 중 에러 발생: {e}")
 
