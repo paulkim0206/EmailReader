@@ -737,19 +737,30 @@ async def _process_ai_tags(ai_reply: str, update: Update, context: ContextTypes.
             client_summary = report_data.get("client_summary", {})
             total_items = report_data.get("total_items", 0)
 
-            # 헤더 메시지 전송
-            header = f"<b>주간 업무 종합 ({week_label})</b>\n고객 {len(client_summary)}사 / 총 {total_items}건\n"
-            await update.message.reply_text(header, parse_mode="HTML")
+            # 메시지 통합 전송 (텔레그램 4096자 제한 대응)
+            current_msg = f"<b>주간 업무 종합 ({week_label})</b>\n고객 {len(client_summary)}사 / 총 {total_items}건\n\n"
 
-            # 고객별로 메시지 분할 전송 (텔레그램 4096자 제한 대응)
             for client, items in sorted(client_summary.items()):
-                msg = f"<b>{escape_for_tg(client)}</b>\n"
+                client_block = f"<b>{escape_for_tg(client)}</b>\n"
                 for item in items:
-                    msg += f"- {escape_for_tg(item)}\n"
-                # 4000자 초과 시 잘라서 전송
-                if len(msg) > 4000:
-                    msg = msg[:4000] + "\n...(생략)"
-                await update.message.reply_text(msg, parse_mode="HTML")
+                    client_block += f"- {escape_for_tg(item)}\n"
+                client_block += "\n"
+                
+                # 다음 고객 내용을 합쳤을 때 4000자가 넘는다면, 지금까지 모은 텍스트를 먼저 전송
+                if len(current_msg) + len(client_block) > 4000:
+                    if current_msg.strip():
+                        await update.message.reply_text(current_msg, parse_mode="HTML")
+                    current_msg = ""
+                    
+                    # 고객 한 곳의 내용만으로도 4000자가 넘는 초과 예외 상황 방어
+                    if len(client_block) > 4000:
+                        client_block = client_block[:4000] + "\n...(생략)\n\n"
+                
+                current_msg += client_block
+                
+            # 남은 텍스트가 있으면 마지막으로 전송
+            if current_msg.strip():
+                await update.message.reply_text(current_msg, parse_mode="HTML")
         else:
             await update.message.reply_text("⚠️ 주간 보고서 생성을 위한 데이터가 부족합니다.")
         ai_reply = re.sub(r"\[\[GENERATE_WEEKLY_REPORT\]\].*?\[\[/GENERATE_WEEKLY_REPORT\]\]", "", ai_reply, flags=re.DOTALL).strip()
