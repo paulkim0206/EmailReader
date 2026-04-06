@@ -243,6 +243,25 @@ async def background_mail_checker(application: Application):
                     logger.error(f"메일 개별 처리 중 돌발 오류 (다음 메일로 넘어감): {me}")
                     continue
 
+            # [V17.0] 베트남 뉴스 RSS 실시간 감시 (5분 주기)
+            try:
+                from config import RSS_CHECK_INTERVAL
+                # 메일 루프가 1분마다 돌므로, 분 단위를 체크하여 5분에 한 번씩 실행
+                if now.minute % RSS_CHECK_INTERVAL == 0:
+                    from rss_manager import fetch_new_rss_items
+                    from telegram_bot import send_rss_alert
+                    
+                    logger.info("📰 뉴스 속보 확인 중... (Scanning for new RSS items)")
+                    new_news = await asyncio.to_thread(fetch_new_rss_items)
+                    
+                    for item in new_news:
+                        await send_rss_alert(application, item)
+                        # 중복 방지를 위해 알림 후 즉시 장부에 기록 (rss_manager에서 내부 처리하지만 안전을 위해)
+                        from rss_manager import save_processed_rss_link
+                        save_processed_rss_link(item['link'])
+            except Exception as re:
+                logger.error(f"RSS 뉴스 감시 중 오류 (무시하고 계속): {re}")
+
             # 1분 대기
             await asyncio.sleep(60)
 

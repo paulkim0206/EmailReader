@@ -88,6 +88,13 @@ TOKEN_USAGE_FILE = os.path.join(DATA_DIR, "token_usage.json")
 # [V14.5] AI 입출력 원문(X-RAY) 기록 파일 경로
 AI_DEBUG_LOG = os.path.join(DEBUG_DIR, "ai_payload_debug.txt")
 
+# [V17.0] 베트남 뉴스 실시간 RSS 브리핑 설정
+RSS_URLS = [
+    "https://vnexpress.net/rss/tin-noi-bat.rss"  # 주요 뉴스 (Highly Featured)
+]
+RSS_CHECK_INTERVAL = 5  # RSS 체크 주기 (분)
+PROCESSED_RSS_FILE = os.path.join(DATA_DIR, "processed_rss.txt") # 뉴스 중복 방지 장부
+
 # 전역 로거(Logger) 설정 함수
 def setup_logger():
     # 로거 인스턴스 생성

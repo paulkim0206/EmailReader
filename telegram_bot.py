@@ -165,6 +165,40 @@ async def send_failure_alert(application: Application, mail_data: dict):
     except Exception as e:
         logger.error(f"최종 실패 알림 전송 실패: {e}")
 
+# [V17.0] 베트남 뉴스 RSS 전용 알림 및 요약 핸들러 (URL 매핑용)
+RSS_URL_MAP = {}
+
+async def send_rss_alert(application, item):
+    """베트남 뉴스 속보 알림을 전송합니다."""
+    import hashlib
+    from config import TELEGRAM_CHAT_ID
+    
+    url = item.get('link', '')
+    url_hash = hashlib.md5(url.encode()).hexdigest()[:10]
+    RSS_URL_MAP[url_hash] = url
+    
+    title = item.get('title', '제목 없음')
+    msg = (
+        f"🇻🇳 <b>[베트남 뉴스 속보]</b>\n\n"
+        f"📰 <b>{escape_for_tg(title)}</b>\n\n"
+        f"<i>({item.get('pub_date', '')})</i>"
+    )
+    
+    # [📰 한글 요약] 버튼 부착
+    keyboard = [[InlineKeyboardButton("📰 한글 요약 보기", callback_data=f"rss_sum_{url_hash}")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    try:
+        await application.bot.send_message(
+            chat_id=str(TELEGRAM_CHAT_ID),
+            text=msg,
+            parse_mode="HTML",
+            reply_markup=reply_markup
+        )
+        logger.info(f"뉴스 속보 알림 전송 완료: {title}")
+    except Exception as e:
+        logger.error(f"뉴스 알림 전송 실패: {e}")
+
 async def show_memo_interface(update: Update, context: ContextTypes.DEFAULT_TYPE, is_edit: bool = False, query=None, view_mode="main"):
     """[V16.0] 파이썬으로 수첩 내용을 빠르게 불러와 인라인 버튼 형태로 구성"""
     from memo_manager import get_active_memos_list
@@ -244,6 +278,52 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         # [V11.10] 부장님의 지시로 원본 저장 기능은 폐지되었습니다. 
         # (혹시라도 이전 메시지의 버튼을 누를 경우를 대비하여 안내를 보냅니다.)
         await query.answer(text="⚠️ 해당 기능(메일 원본 저장)은 부장님 지시로 폐지되었습니다.", show_alert=True)
+        return
+
+    # [V17.0] 베트남 뉴스 기사 요약 처리
+    elif data.startswith("rss_sum_"):
+        url_hash = data.replace("rss_sum_", "")
+        url = RSS_URL_MAP.get(url_hash)
+        
+        if not url:
+            await query.answer("⚠️ 세션이 만료되어 기사 링크를 찾을 수 없거나 이미 분석되었습니다.", show_alert=True)
+            return
+            
+        await query.answer("⏳ 베트남 뉴스를 분석하여 한국어로 요약 중입니다...")
+        
+        # '요약 중...' 상태를 부장님께 알림
+        original_text = query.message.text
+        # [V12.16] 텔레그램 메시지 편집 (상태 업뎃)
+        try:
+            await query.edit_message_text(
+                f"{original_text}\n\n"
+                f"━━━━━━━━━━━━━━━\n"
+                f"🔄 <b>피아니가 기사를 정독하고 있습니다...</b> (10~20초 소요)",
+                parse_mode="HTML"
+            )
+        except Exception: pass
+        
+        try:
+            from ai_processor import summarize_news_article
+            # AI 요약 실행 (실제 웹 스크래핑 포함)
+            summary = await asyncio.to_thread(summarize_news_article, url)
+            
+            # 요약 결과로 메시지 업데이트
+            await query.edit_message_text(
+                f"{original_text}\n\n"
+                f"━━━━━━━━━━━━━━━\n"
+                f"📝 <b>한글 요약 보고</b>\n\n"
+                f"{summary}\n\n"
+                f"🔗 <a href='{url}'>[기사 원문 보기]</a>",
+                parse_mode="HTML",
+                disable_web_page_preview=True
+            )
+        except Exception as e:
+            logger.error(f"뉴스 요약 처리 중 오류: {e}")
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=f"❌ <b>뉴스 요약 실패:</b> 원문을 가져와 분석하는 중 오류가 발생했습니다.\n{url}"
+            )
         return
 
     # [V16.9] 수첩(노트) 인라인 인터페이스 핸들러
