@@ -7,7 +7,7 @@ import pytz
 
 from google import genai
 from google.genai import types
-from config import GEMINI_API_KEY, PROMPTS_DIR, logger, AI_MODEL, USER_TIMEZONE
+from config import GEMINI_API_KEY, PROMPTS_DIR, logger, AI_MODEL, USER_TIMEZONE, AI_DEBUG_LOG
 from token_manager import log_token
 # --- [V11.8] 지능형 성능 최적화: 전역 클라이언트 싱글톤 ---
 _AI_CLIENT = None
@@ -223,10 +223,15 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
             
             req_config = types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
 
-            # --- [X-RAY DEBUG START] --- 
+            # --- [X-RAY DEBUG START V14.5] --- 
             try:
-                debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
-                with open(debug_log_path, "a", encoding="utf-8") as f:
+                # [V14.5] 자동 다이어트 시스템 (10MB 제한)
+                if os.path.exists(AI_DEBUG_LOG) and os.path.getsize(AI_DEBUG_LOG) > 10 * 1024 * 1024:
+                    import shutil
+                    shutil.move(AI_DEBUG_LOG, AI_DEBUG_LOG + ".bak")
+                    logger.info("🧹 [디버그 청소] 로그 파일이 10MB를 초과하여 .bak로 밀어내고 새로 시작합니다.")
+
+                with open(AI_DEBUG_LOG, "a", encoding="utf-8") as f:
                     tz = pytz.timezone(USER_TIMEZONE)
                     now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
                     f.write(f"\n{'='*50}\n")

@@ -30,6 +30,10 @@ LOGS_DIR = os.path.join(BASE_DIR, "logs")
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
 
+# [V14.5] AI 디버깅 리포트 전용 폴더 신설
+DEBUG_DIR = os.path.join(DATA_DIR, "debug_reports")
+os.makedirs(DEBUG_DIR, exist_ok=True)
+
 TIMEZONE_FILE = os.path.join(DATA_DIR, "timezone.json")
 
 def get_current_timezone():
@@ -80,6 +84,9 @@ REPORTS_DIR = os.path.join(DATA_DIR, "reports")
 
 # [V12.25] AI 토큰 사용량 실시간 추적용 장부 경로 세팅
 TOKEN_USAGE_FILE = os.path.join(DATA_DIR, "token_usage.json")
+
+# [V14.5] AI 입출력 원문(X-RAY) 기록 파일 경로
+AI_DEBUG_LOG = os.path.join(DEBUG_DIR, "ai_payload_debug.txt")
 
 # 전역 로거(Logger) 설정 함수
 def setup_logger():
