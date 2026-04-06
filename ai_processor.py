@@ -101,15 +101,6 @@ def _get_now_info():
     except Exception:
         return f"\n\n[현재 시각 정보 없음]"
 
-def _get_ai_response(prompt: str) -> str:
-    """AI에게 질문을 던지고 텍스트로만 깔끔하게 답변을 받아오는 간이 통로입니다."""
-    client = _get_ai_client()
-    if not client: return ""
-    try:
-        response = client.models.generate_content(model=AI_MODEL, contents=prompt)
-        return response.text if response.text else ""
-    except Exception: return ""
-
 def _clean_ai_json(text):
     """AI 응답에서 불필요한 마크다운 기호(```json 등)를 제거하고 순수 JSON만 추출"""
     if not text: return ""
@@ -340,13 +331,41 @@ def translate_news_title(vi_title: str) -> str:
     )
     
     try:
-        # [V17.3] 제목 번역은 가볍고 빠르게 처리
-        summary = _get_ai_response(prompt)
-        log_token(AI_MODEL, prompt, summary, task_id="News_Title_Translation", prompt_text=prompt, response_text=summary)
-        return summary.strip()
+        client = _get_ai_client()
+        if not client: return vi_title
+
+        # --- [X-RAY DEBUG START] ---
+        try:
+            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
+            with open(debug_log_path, "a", encoding="utf-8") as f:
+                tz = pytz.timezone(USER_TIMEZONE)
+                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"\n{'='*50}\n")
+                f.write(f"[X-RAY DEBUG: translate_news_title] {now_str}\n")
+                f.write(f"{'-'*50}\n")
+                f.write(f"[PROMPT]\n{prompt}\n")
+                f.write(f"{'='*50}\n")
+        except Exception as de:
+            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
+        # --- [X-RAY DEBUG END] ---
+
+        # [V18.2] 타 기능과 동일한 정석 호출 및 정산
+        response = client.models.generate_content(model=AI_MODEL, contents=prompt)
+        text = response.text if response.text else ""
+
+        if response.usage_metadata:
+            log_token(
+                task="News_Title_Translation", 
+                prompt_tokens=response.usage_metadata.prompt_token_count, 
+                candidate_tokens=response.usage_metadata.candidates_token_count,
+                prompt_text=prompt,
+                response_text=text
+            )
+        
+        return text.strip() if text else vi_title
     except Exception as e:
         logger.warning(f"뉴스 제목 번역 실패: {e}")
-        return vi_title # 실패 시 원문이라도 반환
+        return vi_title
 
 def summarize_news_article(url: str) -> str:
     """베트남 뉴스 웹페이지 본문을 긁어와 AI로 요약 보고서를 생성합니다."""
@@ -385,12 +404,39 @@ def summarize_news_article(url: str) -> str:
             f"기사 본문:\n{article_text[:5000]}" # 5천자 제한 (토건 보호)
         )
         
-        # [V17.6] 복구된 AI 통로 이용
-        summary = _get_ai_response(prompt)
-        # [V17.2] 토큰 상세 기록 추가
-        log_token("News_Summary", 0, 0, prompt_text=prompt, response_text=summary)
+        # [V18.2] 타 기능과 동일한 정석 호출 및 정산 (X-Ray 포함)
+        client = _get_ai_client()
+        if not client: return "❌ AI 서버 연결 실패"
+
+        # --- [X-RAY DEBUG START] ---
+        try:
+            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
+            with open(debug_log_path, "a", encoding="utf-8") as f:
+                tz = pytz.timezone(USER_TIMEZONE)
+                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                f.write(f"\n{'='*50}\n")
+                f.write(f"[X-RAY DEBUG: summarize_news_article] {now_str}\n")
+                f.write(f"{'-'*50}\n")
+                f.write(f"[SYSTEM_INSTRUCTION]\n{prompt}\n")
+                f.write(f"{'='*50}\n")
+        except Exception as de:
+            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
+        # --- [X-RAY DEBUG END] ---
+
+        # [V18.2] 정석적인 토큰 정산과 응답 생성
+        response = client.models.generate_content(model=AI_MODEL, contents=prompt)
+        text = response.text if response.text else ""
+
+        if response.usage_metadata:
+            log_token(
+                task="News_Summary", 
+                prompt_tokens=response.usage_metadata.prompt_token_count, 
+                candidate_tokens=response.usage_metadata.candidates_token_count,
+                prompt_text=prompt,
+                response_text=text
+            )
         
-        return summary.strip() if summary else "❌ AI가 기사를 분석하지 못했습니다."
+        return text.strip() if text else "❌ AI가 기사를 분석하지 못했습니다."
     except Exception as e:
         logger.error(f"뉴스 요약 처리 중 오류: {e}")
         return "❌ 기사 본문을 분석하는 중에 오류가 발생했습니다."
