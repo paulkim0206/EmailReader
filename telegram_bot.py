@@ -508,6 +508,30 @@ async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
+async def handle_time_info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V16.4] 부장님의 요청으로 분리된 명령어. 순수하게 현재 맞춰진 시간만 문자로 알려줍니다.
+    """
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
+    
+    from config import USER_TIMEZONE
+    import pytz
+    
+    try:
+        tz = pytz.timezone(USER_TIMEZONE)
+        now = datetime.datetime.now(tz)
+    except Exception:
+        now = datetime.datetime.now()
+        
+    msg = (
+        f"⏰ <b>현재 시각 안내</b>\n\n"
+        f"현재 설정된 지역 <b>[{USER_TIMEZONE}]</b> 기준으로\n"
+        f"📅 <b>{now.strftime('%Y년 %m월 %d일 (%a)')}</b>\n"
+        f"⏱ <b>{now.strftime('%p %I시 %M분 %S초').replace('AM', '오전').replace('PM', '오후')}</b>\n\n"
+        f"*(시간 설정을 변경하시려면 /timeupdate 명령어를 이용해 주세요)*"
+    )
+    await update.message.reply_text(msg, parse_mode="HTML")
+
 async def handle_time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     [V7.0] 부장님의 시계를 세계 어디서든 동기화하는 명령어입니다.
@@ -605,7 +629,11 @@ async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     memo_content = re.sub(r'^/note\s*', '', text, flags=re.IGNORECASE).strip()
 
     if not memo_content:
-        await update.message.reply_text("🤔 부장님! 내용을 명령어 뒤에 띄어쓰고 같이 적어주세요!\n👉 예시: /note 🐛버그: 텔레그램 버튼 안 눌림")
+        from telegram import ForceReply
+        await update.message.reply_text(
+            "📝 새로 추가할 메모 내용을 하단에 적어주세요. (이 메시지에 대한 답장 형태)",
+            reply_markup=ForceReply(selective=True)
+        )
         return
 
     try:
@@ -974,8 +1002,8 @@ def setup_telegram_handlers(application: Application):
     application.add_handler(CommandHandler("memory", handle_memory_command))
     application.add_handler(CallbackQueryHandler(handle_memory_callback, pattern="^memory_"))
     
-    # [V7.0] 시간 시계 관리 명령어 (메뉴 호출)
-    application.add_handler(CommandHandler("time", handle_time_command))
+    # [V7.0] 시간 시계 관리 명령어 (메뉴 호출 분리)
+    application.add_handler(CommandHandler("time", handle_time_info_command))
     application.add_handler(CommandHandler("timeupdate", handle_time_command))
 
     # [V7.0] 스마트폰 GPS 위치 공유 수신기
