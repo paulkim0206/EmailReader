@@ -30,8 +30,8 @@ async def handle_scheduled_reports(application: Application):
         now = datetime.datetime.now(tz)
         today_str = now.strftime("%Y-%m-%d")
         
-        # [V16.6] 스케줄링 운영 시간 확장
-        if now.hour not in [0, 6]:
+        # [V16.7] 스케줄링 운영 시간 통합 (오전 6시 집중 보고)
+        if now.hour != 6:
             return
 
         # 중복 보고 방지를 위한 정밀 장부 로드
@@ -43,18 +43,18 @@ async def handle_scheduled_reports(application: Application):
             except Exception:
                 last_log = {}
 
-        # --- [1] 새벽 0시: 데일리 토큰 정산 보고서 ---
-        if now.hour == 0:
+        # --- [1] 오전 6시 5분: 데일리 토큰 정산 보고서 ---
+        if now.minute == 5:
             if last_log.get("token_report") != today_str:
                 from token_manager import get_daily_token_report_message
-                # 자정에 보고하는 것은 '어제' 하루치 데이터입니다.
+                # 6시 5분에 보고하는 것은 '어제' 하루치 데이터입니다.
                 yesterday_obj = now - datetime.timedelta(days=1)
                 yesterday_str = yesterday_obj.strftime("%Y-%m-%d")
                 
                 token_msg = get_daily_token_report_message(yesterday_str)
                 if token_msg:
                     await application.bot.send_message(chat_id=str(TELEGRAM_CHAT_ID), text=token_msg, parse_mode="HTML")
-                    logger.info(f"✅ 자정 토큰 정산 리포트 발송 완료 ({yesterday_str})")
+                    logger.info(f"✅ 데일리 토큰 정산 리포트 발송 완료 ({yesterday_str})")
                 
                 # 토큰 보고 완료 기록
                 last_log["token_report"] = today_str
@@ -62,8 +62,8 @@ async def handle_scheduled_reports(application: Application):
                     json.dump(last_log, f)
             return
 
-        # --- [2] 오전 6시: 비즈니스 업무 보고서 ---
-        if now.hour == 6:
+        # --- [2] 오전 6시 0분: 비즈니스 업무 보고서 ---
+        if now.minute == 0:
             if last_log.get("business_report") == today_str or last_log.get("date") == today_str:
                 return
 
