@@ -329,8 +329,8 @@ def _fallback_response():
 def route_intent(user_message: str) -> str:
     """
     [V13.0] AI 기반 초경량 의도 분석 라우터.
-    사용자의 메시지를 읽고 4가지 카테고리 중 하나로 정확히 분류합니다.
-    분류 기준: MAIL_WORK, MEMO_WORK, REPORT_WORK, GENERAL_CHAT
+    사용자의 메시지를 읽고 3가지 카테고리 중 하나로 정확히 분류합니다.
+    분류 기준: MAIL_WORK, REPORT_WORK, GENERAL_CHAT
     """
     if not GEMINI_API_KEY: return "GENERAL_CHAT"
     if not user_message: return "GENERAL_CHAT"
@@ -338,7 +338,7 @@ def route_intent(user_message: str) -> str:
 
     prompt = (
         "너는 부장님의 지시 의도를 정확히 파악하는 초고속 의도 분석 라우터(Router)다.\n"
-        "다음 사용자의 메시지를 읽고, 오직 아래 4가지 영문 카테고리 이름 중 하나만 결과로 출력하라. (설명, 인사말 등 다른 말은 절대 금지)\n\n"
+        "다음 사용자의 메시지를 읽고, 오직 아래 3가지 영문 카테고리 이름 중 하나만 결과로 출력하라. (설명, 인사말 등 다른 말은 절대 금지)\n\n"
         "[카테고리]\n"
         "1. MAIL_WORK : 이메일 요약, 메일 수신 확인, 스킵 이유 등 메일과 관련된 질문\n"
         "2. REPORT_WORK : 일일 보고서, 주간 보고서 생성 요청\n"
