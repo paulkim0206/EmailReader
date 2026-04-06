@@ -47,12 +47,21 @@ def update_daily_report(date_str=None):
         target_date_obj = datetime.date.fromisoformat(date_str)
         logger.info(f"🎯 [수동 요청] 지정된 날짜({date_str}) 보고서 작성을 시작합니다.")
 
-    # 1. 원천 데이터(Thread Memory) 추출
+    # 1. [V16.5] 지능형 장고 뒤지기: 이미 가공된 보고서가 있다면 AI 비용을 아끼고 즉시 배송합니다.
+    report_path = get_weekly_report_path(target_date_obj)
+    weekly_data = load_weekly_report(report_path)
+    weekday_name = target_date_obj.strftime("%A")
+    
+    if weekday_name in weekly_data:
+        logger.info(f"💾 [{date_str}] 이미 완성된 보고서가 장고에 있습니다. 즉시 배달합니다.")
+        return weekly_data[weekday_name].get("data")
+
+    # 2. 원천 데이터(Thread Memory) 추출 (완성본이 없을 때만 요리 시작)
     from thread_manager import get_summaries_all_by_date
     raw_summaries = get_summaries_all_by_date(date_str)
     
     if not raw_summaries:
-        logger.warning(f"⚠️ [{date_str}] 요약할 메일 데이터가 없습니다. (핀 버튼으로 선택된 메일이 있는지 확인해 주세요.)")
+        logger.warning(f"⚠️ [{date_str}] 요약할 데이터도 없고 기존 보고서도 없습니다.")
         return None
 
     # 2. AI 분석 (30자 주제별 요약)
