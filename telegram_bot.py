@@ -498,8 +498,8 @@ async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # [V12.16] 부장님을 위한 '하단 고정형 스마트 메뉴' 설계 및 장착
     keyboard = [['❓ 도움말', '📝 노트보기', '🔄 업데이트']]
-    # resize_keyboard=True 로 하면 버튼 크기가 화면에 맞게 아주 콤팩트하고 예쁘게 조절됩니다.
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    # resize_keyboard=True 로 크기 최적화, is_persistent=True로 항상 고정 유지
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
     
     await update.message.reply_text(
         "✅ 🤖 <b>비서 피아니가 정상적으로 살아있으며, 부장님의 모든 명령을 대기 중입니다!</b>\n\n"
