@@ -201,16 +201,12 @@ async def background_mail_checker(application: Application):
                         save_processed_uid(mail_data['uid'])
                     elif ai_result.get('is_ai_error'):
                         logger.warning(f"⚠️ AI 실패 → 지연 보고 및 대기열 등록: {mail_data.get('subject')}")
-                        # 에러 시에는 장부(processed_uid)에 적지 않습니다! 
-                        # 그래야 나중에 다시 시도되거나 다음 서버 시작 때 누락되지 않습니다.
                         await send_email_alert(application, mail_data, ai_result, {}, mail_data.get('subject', ''))
                         add_to_retry_queue(mail_data)
+                    else:
                         t_data = {} # 더 이상 쓰레드 묶기를 안 하므로 빈 객체 처리.
-                        
                         await send_email_alert(application, mail_data, ai_result, t_data, mail_data.get('subject', ''))
-                        # [V15.0] Flat DB로 저장
                         save_summary_entry(mail_data.get('uid'), mail_data.get('subject', ''), ai_result.get('summary', ''), None, ai_result.get('client_name'))
-                        # 분석 성공 시에만 비로소 처리 완료로 서명!
                         save_processed_uid(mail_data['uid'])
                         logger.info(f"장부 저장 성공 (UID: {mail_data.get('uid')})")
                 except Exception as me:
