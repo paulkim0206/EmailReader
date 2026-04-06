@@ -54,123 +54,82 @@ def save_threads(threads):
             logger.error(f"장부 저장 실패: {e}")
 
 
-def save_thread_entry(thread_key, thread_index, summary, msg_id=None, uid=None, client_name=None):
+def get_next_thread_index(thread_key):
+    pass # Deleted
+
+def save_summary_entry(uid, subject, summary, msg_id=None, client_name=None):
     """
-    [V12.12] 제미나이가 판단한 결과와 함께 메일 고유 번호(uid)를 장부에 저장합니다.
-    [V12.17] 부장님의 지시로 스레드 최상위에 '고객사명(client_name)' 칸을 신설합니다.
+    [V15.0 Flat DB] 메일 고유 번호(uid)를 키로 삼아 1차원 평면(Flat) 구조로 요약본을 저장합니다.
     """
+    if not uid:
+        logger.warning("UID가 누락되어 장부에 저장하지 않습니다.")
+        return
+        
     threads = load_threads()
     now_str = datetime.datetime.now().isoformat()
+    uid_str = str(uid)
 
-    new_entry = {
-        "uid": uid,            # ✅ 메일 고유 번호(UID) 기록 칸 신설!
-        "index": thread_index,
-        "date": now_str[:10],  # YYYY-MM-DD
+    threads[uid_str] = {
+        "subject": subject,        # 구 thread_key 호환
+        "client_name": client_name or "알 수 없음",
+        "date": now_str[:10],      # YYYY-MM-DD
         "summary": summary,
-        "for_report": False    # [V11.9] 기본은 미포함 상태이며, 부장님이 버튼을 누를 때 True로 바뀝니다.
+        "msg_id": msg_id,
+        "for_report": False,       # 보고서 등록 토글
+        "last_date": now_str       # 정렬/삭제용 타임스탬프
     }
 
-    if thread_key not in threads:
-        threads[thread_key] = {
-            "msg_id": None,
-            "client_name": client_name, # ✅ 최초 생성 시 고객사명 기록
-            "last_date": now_str,
-            "summary_history": []
-        }
-    else:
-        # [V12.17] 기존 스레드라도 AI가 더 정확한 고객사명을 가져오면 업데이트합니다.
-        if client_name and client_name != "알 수 없음":
-            threads[thread_key]["client_name"] = client_name
-
-    threads[thread_key]["last_date"] = now_str
-    if msg_id is not None:
-        threads[thread_key]["msg_id"] = msg_id
-
-    threads[thread_key]["summary_history"].append(new_entry)
-
-    # 스레드별 최신 5개 초과분 자동 삭제 (가비지 컬렉터)
-    history = threads[thread_key]["summary_history"]
-    if len(history) > THREAD_HISTORY_LIMIT:
-        threads[thread_key]["summary_history"] = history[-THREAD_HISTORY_LIMIT:]
-        logger.info(f"가비지 컬렉터: '{thread_key}' 방의 오래된 요약본을 정리했습니다.")
+    # 오래된 데이터 자동 청소 (최신 1000개만 유지)
+    if len(threads) > THREAD_MAX_SIZE:
+        sorted_keys = sorted(
+            threads.keys(),
+            key=lambda k: threads[k].get("last_date", ""),
+            reverse=True
+        )
+        threads = {k: threads[k] for k in sorted_keys[:THREAD_MAX_SIZE]}
 
     save_threads(threads)
-    logger.info(f"장부 저장 완료: '{thread_key}' #{thread_index}")
+    logger.info(f"장부 저장 (Flat DB) 완료: UID={uid_str}")
 
-def mark_as_report_target(thread_key, thread_index, status=True):
+def toggle_report_pin_by_uid(uid, status=True):
     """
-    [V11.9] 특정 메일 요약을 일일/주간 보고서 대상으로 마킹하거나 해제합니다.
+    [V15.0 Flat DB] UID로 즉시 검색하여 핀셋(보고서 대상) 상태를 토글합니다.
     """
     threads = load_threads()
-    if thread_key not in threads:
-        return False
-    
-    found = False
-    for entry in threads[thread_key].get("summary_history", []):
-        if entry.get("index") == thread_index:
-            entry["for_report"] = status
-            found = True
-            break
-            
-    if found:
+    uid_str = str(uid)
+    if uid_str in threads:
+        threads[uid_str]["for_report"] = status
         save_threads(threads)
-        logger.info(f"보고서 마킹 완료: '{thread_key}' #{thread_index} -> {status}")
+        logger.info(f"보고서 마킹 완료: UID={uid_str} -> {status}")
         return True
     return False
 
-def get_thread_msg_id(thread_key):
-    """텔레그램 핑퐁 말풍선 연결을 위해 저장된 메시지 ID를 가져옵니다."""
-    threads = load_threads()
-    if thread_key in threads:
-        return threads[thread_key].get("msg_id")
-    return None
-
 def get_summaries_all_by_date(target_date: str) -> list:
     """
-    [V9.0 리포트 전용] 장부(thread_memory.json)를 샅샅이 뒤져
-    특정 날짜(YYYY-MM-DD)와 일치하는 모든 요약본을 수집하여 리스트로 반환합니다.
-    [V12.17] 반환 시 장부에 저장된 client_name 정보를 함께 태워 보냅니다.
+    [V15.0 Flat DB] 장부를 단일 루프로 훑어 특정 날짜의 핀이 꽂힌 요약본을 반환합니다.
     """
     threads = load_threads()
     results = []
     
-    for thread_key, data in threads.items():
-        client_name = data.get("client_name", "알 수 없음")
-        history = data.get("summary_history", [])
-        for entry in history:
-            if isinstance(entry, dict):
-                # [V11.9] 특정 날짜와 일치 '하면서' 부장님이 보고서용으로 선정한(for_report=True) 것만 수집
-                if entry.get("date") == target_date:
-                    if entry.get("for_report", False): # 핀 버튼 누른 것만 필터링
-                        results.append({
-                            "client": client_name, # ✅ 장부의 고객사명 전달
-                            "subject": thread_key,
-                            "summary": entry.get("summary", "")
-                        })
-            else:
-                # 구형 데이터(단순 문자열)는 무시 (새로운 시스템 체제 전환 중)
-                continue
-                    
+    for uid_str, data in threads.items():
+        if isinstance(data, dict):
+            if data.get("date") == target_date and data.get("for_report", False):
+                results.append({
+                    "client": data.get("client_name", "알 수 없음"),
+                    "subject": data.get("subject", "제목 없음"),
+                    "summary": data.get("summary", "")
+                })
     return results
 
 def find_entry_by_uid(uid):
     """
-    [V12.12] 번호(uid)를 던지면 장부 전체를 뒤져서 요약본 정보를 찾아오는 탐정 기능입니다.
-    업데이트 후 캐시가 비었을 때 버튼 기능을 복구하기 위해 사용합니다.
+    [V15.0] 이전 호환성 및 메모/학습 조회용으로 즉시 반환합니다.
     """
     if not uid: return None
-    
     threads = load_threads()
-    uid_str = str(uid)
-    
-    for thread_key, data in threads.items():
-        history = data.get("summary_history", [])
-        for entry in history:
-            if isinstance(entry, dict) and str(entry.get("uid")) == uid_str:
-                return {
-                    "thread_key": thread_key,
-                    "thread_index": entry.get("index"),
-                    "summary": entry.get("summary")
-                }
+    return threads.get(str(uid))
+
+def get_thread_msg_id(subject):
+    """더 이상 텔레그램 쓰레드 엮기를 사용하지 않으므로 None을 반환하여 기능을 무력화합니다."""
     return None
 

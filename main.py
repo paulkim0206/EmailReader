@@ -11,7 +11,7 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, USER_TIMEZONE, 
 from mail_parser import fetch_recent_emails, save_processed_uid
 from ai_processor import process_email_with_ai, load_all_prompts_to_memory
 from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, escape_for_tg, send_failure_alert, clear_temp_cache
-from thread_manager import save_thread_entry, get_thread_msg_id
+from thread_manager import save_summary_entry, get_thread_msg_id
 from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue, update_retry_status
 from report_manager import update_daily_report, generate_weekly_summary
 import memo_manager # [V12.29] 서버 시작 시 즉시 메모 일괄 이사(청소)를 수행하기 위해 임포트
@@ -158,13 +158,11 @@ async def background_mail_checker(application: Application):
 
                         if not ai_result.get('is_ai_error'):
                             logger.info(f"✅ [배경 재시도 성공] 요약 전송: {retry_mail.get('subject')}")
-                            thread_key = ai_result.get('thread_key', retry_mail.get('subject', ''))
-                            thread_index = ai_result.get('thread_index', 1)
-                            is_thread = ai_result.get('is_thread', False)
-                            t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
+                            t_data = {} # 더 이상 쓰레드 묶기를 안 하므로 빈 객체 처리.
                             
-                            await send_email_alert(application, retry_mail, ai_result, t_data, thread_key)
-                            save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'), retry_mail.get('uid'), ai_result.get('client_name'))
+                            await send_email_alert(application, retry_mail, ai_result, t_data, retry_mail.get('subject', ''))
+                            # [V15.0] Flat DB로 저장
+                            save_summary_entry(retry_mail.get('uid'), retry_mail.get('subject', ''), ai_result.get('summary', ''), None, ai_result.get('client_name'))
                             remove_from_retry_queue(retry_uid)
                             # [V12.15] 재시도 성공 시 명시적으로 처리 완료 기록
                             save_processed_uid(retry_mail.get('uid'))
@@ -207,14 +205,11 @@ async def background_mail_checker(application: Application):
                         # 그래야 나중에 다시 시도되거나 다음 서버 시작 때 누락되지 않습니다.
                         await send_email_alert(application, mail_data, ai_result, {}, mail_data.get('subject', ''))
                         add_to_retry_queue(mail_data)
-                    else:
-                        thread_key = ai_result.get('thread_key', mail_data.get('subject', ''))
-                        thread_index = ai_result.get('thread_index', 1)
-                        is_thread = ai_result.get('is_thread', False)
-                        t_data = {"msg_id": get_thread_msg_id(thread_key)} if is_thread else {}
+                        t_data = {} # 더 이상 쓰레드 묶기를 안 하므로 빈 객체 처리.
                         
-                        await send_email_alert(application, mail_data, ai_result, t_data, thread_key)
-                        save_thread_entry(thread_key, thread_index, ai_result.get('summary', ''), t_data.get('msg_id'), mail_data.get('uid'), ai_result.get('client_name'))
+                        await send_email_alert(application, mail_data, ai_result, t_data, mail_data.get('subject', ''))
+                        # [V15.0] Flat DB로 저장
+                        save_summary_entry(mail_data.get('uid'), mail_data.get('subject', ''), ai_result.get('summary', ''), None, ai_result.get('client_name'))
                         # 분석 성공 시에만 비로소 처리 완료로 서명!
                         save_processed_uid(mail_data['uid'])
                         logger.info(f"장부 저장 성공 (UID: {mail_data.get('uid')})")

@@ -192,28 +192,16 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         try: await query.edit_message_reply_markup(reply_markup=None)
         except Exception: pass
 
-        from thread_manager import find_entry_by_uid, mark_as_report_target
+        from thread_manager import toggle_report_pin_by_uid
         
-        # 1. 먼저 장부에서 정보를 찾습니다 (V12.12 핵심: 업데이트 후에도 작동!)
-        info = find_entry_by_uid(uid)
-        
-        if info:
-            thread_key = info["thread_key"]
-            thread_index = info["thread_index"]
-            
-            if mark_as_report_target(thread_key, thread_index, status=True):
-                try:
-                    # [V12.23] 부장님 지시: 성공(✅)은 대화 흐름을 방해하지 않는 '토스트(자동 소멸)' 알림으로 응답합니다.
-                    await query.answer(text="✅ 일일보고서 대상으로 등록 완료! 📋", show_alert=False)
-                except Exception: pass
-            else:
-                # [QC] 오류(❌)는 부장님이 놓치지 않도록 말풍선으로 확실히 남깁니다!
-                await query.answer() 
-                await query.message.reply_text("❌ 장부 기록 중 문제가 생겼습니다. 나중에 다시 시도해 주세요.", parse_mode="HTML")
+        # [V15.0 Flat DB] 단 한 줄로 초고속 핀셋 토글 처리
+        if toggle_report_pin_by_uid(uid, status=True):
+            try:
+                await query.answer(text="✅ 일일보고서 대상으로 등록 완료! 📋", show_alert=False)
+            except Exception: pass
         else:
-            # [QC] 정보 부재(⚠️)도 부장님이 인지하셔야 하므로 말풍선으로 답장합니다!
             await query.answer()
-            await query.message.reply_text("⚠️ 너무 오래된 메일이거나 장부에서 찾을 수 없습니다. (30일 경과 등)", parse_mode="HTML")
+            await query.message.reply_text("⚠️ 장부에서 찾을 수 없습니다. (서버 초기화 등)", parse_mode="HTML")
         return
 
     # [새로운 분기 3] 사용자가 AI 학습(👎) 단추를 눌렀을 때!!
