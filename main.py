@@ -153,10 +153,8 @@ async def background_mail_checker(application: Application):
                         retry_mail = retry_item["mail_data"]
                         retry_uid = retry_item["uid"]
                         retry_count = retry_item.get("retry_count", 1)
-                        thread_history_text = format_threads_for_prompt()
-                        
                         # [V12.7] 지능형 항복: 배경 재시도는 딱 '1회'만 더 기회를 줍니다.
-                        ai_result = await asyncio.to_thread(process_email_with_ai, retry_mail, thread_history_text)
+                        ai_result = await asyncio.to_thread(process_email_with_ai, retry_mail)
 
                         if not ai_result.get('is_ai_error'):
                             logger.info(f"✅ [배경 재시도 성공] 요약 전송: {retry_mail.get('subject')}")
@@ -196,8 +194,7 @@ async def background_mail_checker(application: Application):
             # 새 메일 처리
             for mail_data in unseen_emails:
                 try:
-                    thread_history_text = format_threads_for_prompt()
-                    ai_result = await asyncio.to_thread(process_email_with_ai, mail_data, thread_history_text)
+                    ai_result = await asyncio.to_thread(process_email_with_ai, mail_data)
 
                     if ai_result.get('status') == '스킵':
                         logger.info(f"🙈 AI 판단: 학습 패턴에 의해 스킵 ({mail_data.get('subject')})")

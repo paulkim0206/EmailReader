@@ -53,57 +53,6 @@ def save_threads(threads):
         except Exception as e:
             logger.error(f"장부 저장 실패: {e}")
 
-def format_threads_for_prompt():
-    """
-    제미나이에게 던질 장부를 준비합니다.
-    - 30일 이상 소식 없는 오래된 방은 자동 삭제합니다.
-    - 각 방의 요약 기록에 #인덱스 번호를 붙여서 텍스트로 포맷합니다.
-    - 각 방에서는 최신 5개까지만 전달합니다.
-    """
-    threads = load_threads()
-    now = datetime.datetime.now()
-    cleaned = {}
-
-    for key, data in threads.items():
-        last_date_str = data.get("last_date", "")
-        try:
-            last_date = datetime.datetime.fromisoformat(last_date_str)
-            if (now - last_date).days >= THREAD_TIMEOUT_DAYS:
-                logger.info(f"30일 타임아웃: '{key}' 방을 장부에서 삭제합니다.")
-                continue  # 30일 초과 방은 제외 (다음 저장 시 실제로 삭제됨)
-        except Exception:
-            pass
-        cleaned[key] = data
-
-    # 변경사항이 있으면 저장
-    if len(cleaned) != len(threads):
-        save_threads(cleaned)
-
-    if not cleaned:
-        return "없음"  # 장부가 텅 비었을 때
-
-    lines = []
-    for thread_key, data in cleaned.items():
-        history = data.get("summary_history", [])
-        # 최신 5개만 잘라서 포맷
-        recent = history[-THREAD_HISTORY_LIMIT:]
-        formatted_entries = []
-        for i, entry in enumerate(recent):
-            if isinstance(entry, dict):
-                idx = entry.get("index", i + 1)
-                date = entry.get("date", "날짜 미상")
-                summary = entry.get("summary", "")
-            else:
-                # 기존 구형 문자열 포맷 호환 처리
-                idx = i + 1
-                date = "날짜 미상"
-                summary = entry
-            formatted_entries.append(f"  #{idx} [{date}]: {summary}")
-
-        lines.append(f"[주제: {thread_key}]")
-        lines.extend(formatted_entries)
-
-    return "\n".join(lines)
 
 def save_thread_entry(thread_key, thread_index, summary, msg_id=None, uid=None, client_name=None):
     """

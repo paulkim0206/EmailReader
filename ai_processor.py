@@ -120,10 +120,10 @@ def load_ability(ability_name):
     """abilities 폴더 내의 전문 직무 프롬프트를 읽어옵니다. (호환성 유지)"""
     return _read_prompt_file(f"{ability_name}.txt", subfolder="abilities")
 
-def process_email_with_ai(mail_data, thread_history_text, force_summarize=False, retry_count=1):
+def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
     """
-    [V11.5] 헬퍼 함수 기반 리팩토링 버전.
-    [V11.2] retry_count에 따라 주력/백업 엔진을 지능적으로 선택합니다.
+    [V14.0 Stateless V2] 이제 무장부 체제입니다. 과거 핑퐁된 내역을 억지로 주입하지 않고,
+    새 메일 원문 안에 포함된 과거 대화를 맥락으로 삼아 최신 내용만 요약합니다.
     """
     email_body = mail_data.get('body', '')
     
@@ -196,7 +196,7 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
                         f"\n#### [과거 실수 복기 사례 #{i}]\n"
                         f"- [당시 오답]: {c.get('mistake', '알 수 없음')}\n"
                         f"- [부장님 지적]: {c.get('correction', '지시사항 준수 요청')}\n"
-                        f"- [반성 및 신규 규칙]: {c.get('lesson', '규칙 미지정')}\n"
+                        f"- [반성 및 신규 규칙]: {c.get('lesson', '규칙 정립 미지정')}\n"
                         f"####"
                     )
                 else:
@@ -209,8 +209,8 @@ def process_email_with_ai(mail_data, thread_history_text, force_summarize=False,
     # 시간 감각 주입
     dynamic_prompt += _get_now_info()
 
-    # 데이터 구성
-    final_text = f"[새 메일]\n발신: {mail_data.get('sender')}\n제목: {mail_data.get('subject')}\n본문: {email_body}\n\n[장부]\n{thread_history_text}"
+    # 데이터 구성 (장부 주입 제거! 토큰 대폭 다이어트)
+    final_text = f"[새 메일]\n발신: {mail_data.get('sender')}\n제목: {mail_data.get('subject')}\n본문: {email_body}"
 
     # [V12.7] 부장님의 지식: 정석형 지능형 재시도 (Exponential Backoff 적용)
     max_retries = 3
