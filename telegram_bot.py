@@ -182,19 +182,34 @@ async def show_memo_interface(update: Update, context: ContextTypes.DEFAULT_TYPE
             
     if view_mode == "main":
         if memos:
+            # [V16.9] 부장님 지시: [추가], [수정], [완료] 순서로 심플하게 배치
             keyboard.append([
-                InlineKeyboardButton("➕ 메모 추가", callback_data="memo_add"),
-                InlineKeyboardButton("✅ 메모 완료", callback_data="memo_del_menu")
+                InlineKeyboardButton("➕ 추가", callback_data="memo_add"),
+                InlineKeyboardButton("✏️ 수정", callback_data="memo_edit_menu"),
+                InlineKeyboardButton("✅ 완료", callback_data="memo_del_menu")
             ])
         else:
-            keyboard.append([InlineKeyboardButton("➕ 메모 추가", callback_data="memo_add")])
+            keyboard.append([InlineKeyboardButton("➕ 추가", callback_data="memo_add")])
             
     elif view_mode == "delete_menu":
-        msg += "\n🗑 <b>완료 처리할(지울) 메모의 번호(ID)를 선택하세요.</b>"
+        msg += "\n🗑 <b>완료 처리할(지울) 번호를 선택하세요.</b>"
         row = []
         for memo in memos:
             memo_id = memo.get('id', '?')
             row.append(InlineKeyboardButton(f"[{memo_id}]", callback_data=f"memo_del_{memo_id}"))
+            if len(row) >= 5:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton("🔙 뒤로 가기", callback_data="memo_main")])
+
+    elif view_mode == "edit_menu":
+        msg += "\n✏️ <b>수정할 번호를 선택하세요.</b>"
+        row = []
+        for memo in memos:
+            memo_id = memo.get('id', '?')
+            row.append(InlineKeyboardButton(f"[{memo_id}]", callback_data=f"memo_edit_{memo_id}"))
             if len(row) >= 5:
                 keyboard.append(row)
                 row = []
@@ -231,27 +246,42 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer(text="⚠️ 해당 기능(메일 원본 저장)은 부장님 지시로 폐지되었습니다.", show_alert=True)
         return
 
-    # [V16.1] 초고속 인라인 메모 관리 기능 (봇파더 스타일 전환형 메뉴)
+    # [V16.9] 수첩(노트) 인라인 인터페이스 핸들러
     elif data.startswith("memo_"):
         if data == "memo_main":
             await show_memo_interface(update, context, is_edit=True, query=query, view_mode="main")
         elif data == "memo_del_menu":
             await show_memo_interface(update, context, is_edit=True, query=query, view_mode="delete_menu")
+        elif data == "memo_edit_menu":
+            await show_memo_interface(update, context, is_edit=True, query=query, view_mode="edit_menu")
+        
         elif data.startswith("memo_del_"):
             memo_id = int(data.split("_")[2])
             from memo_manager import delete_memo
             if delete_memo(memo_id):
-                await query.answer(text="✅ 해당 메모를 완료(삭제) 처리했습니다!", show_alert=False)
-                # 삭제 후 다시 삭제 메뉴 그대로 보여주기
+                await query.answer(text=f"✅ {memo_id}번 노트를 완료 처리했습니다!", show_alert=False)
                 await show_memo_interface(update, context, is_edit=True, query=query, view_mode="delete_menu")
             else:
-                await query.answer(text="🚨 삭제 실패: 상태를 확인해주세요.", show_alert=True)
+                await query.answer(text="🚨 완료 처리 실패!", show_alert=True)
+                
+        elif data.startswith("memo_edit_"):
+            memo_id = int(data.split("_")[2])
+            from telegram import ForceReply
+            # [부장님 취향저격] 상단 말풍선 알림 발송
+            await query.answer(text=f"✏️ {memo_id}번 노트 수정을 시작합니다.")
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=f"📝 <b>[{memo_id}번 수첩 수정]</b>\n수정할 새로운 내용을 아래에 적어주세요. (이 메시지에 답장)",
+                parse_mode="HTML",
+                reply_markup=ForceReply(selective=True)
+            )
+            
         elif data == "memo_add":
             from telegram import ForceReply
             await query.answer()
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
-                text="📝 새로 추가할 메모 내용을 하단에 적어주세요. (이 메시지에 대한 답장 형태)",
+                text="📝 새로 추가할 노트 내용을 아래에 적어주세요. (이 메시지에 답장)",
                 reply_markup=ForceReply(selective=True)
             )
         return
@@ -860,16 +890,35 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     user_text = update.message.text
     
-    # [V16.1] ForceReply 기반 메모 추가 기능 (답장 감지)
-    if update.message.reply_to_message and "새로 추가할 메모 내용을 하단에 적어주세요" in update.message.reply_to_message.text:
-        from memo_manager import save_memo
-        memo_content = user_text.strip()
-        if save_memo(memo_content):
-            await update.message.reply_text(f"✅ 성공적으로 새 메모가 수첩에 등록되었습니다!\n\n내용: {memo_content}")
-            await show_memo_interface(update, context, view_mode="main") # 리스트 갱신 출력
-        else:
-            await update.message.reply_text("🚨 메모 저장 중 오류가 발생했습니다.")
-        return
+    # [V16.9] ForceReply 기반 노트 추가/수정 기능 (답장 감지)
+    if update.message.reply_to_message:
+        replied_msg = update.message.reply_to_message.text
+        
+        # 1. 노트 추가 처리
+        if "새로 추가할 노트 내용" in replied_msg:
+            from memo_manager import save_memo
+            memo_content = user_text.strip()
+            if save_memo(memo_content):
+                await update.message.reply_text(f"✅ 성공적으로 새 노트가 수첩에 등록되었습니다!\n\n내용: {memo_content}")
+                await show_memo_interface(update, context, view_mode="main") # 리스트 갱신 출력
+            else:
+                await update.message.reply_text("🚨 노트 저장 중 오류가 발생했습니다.")
+            return
+            
+        # 2. 노트 수정 처리
+        elif "수첩 수정" in replied_msg:
+            # ID 추출 ( [12번 수첩 수정] 형태에서 12를 뽑아냄 )
+            match = re.search(r'\[(\d+)번 수첩 수정\]', replied_msg)
+            if match:
+                memo_id = int(match.group(1))
+                from memo_manager import update_memo
+                new_content = user_text.strip()
+                if update_memo(memo_id, new_content):
+                    await update.message.reply_text(f"✅ {memo_id}번 노트가 성공적으로 수정되었습니다!\n\n변경내용: {new_content}")
+                    await show_memo_interface(update, context, view_mode="main")
+                else:
+                    await update.message.reply_text(f"🚨 {memo_id}번 노트 수정에 실패했습니다.")
+            return
 
     # [V12.0] 하단 고정 메뉴 감지
     if user_text == "❓ 도움말":
