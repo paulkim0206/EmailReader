@@ -224,7 +224,7 @@ def get_daily_token_report_message(target_date=None, is_realtime=False):
     
     for task_id, tokens in sorted_tasks:
         name = task_map.get(task_id, task_id)
-        msg += f"- {name}: <b>{tokens['in'] + tokens['out']:,}</b> 🪙 (In: {tokens['in']:,} / Out: {tokens['out']:,})\n"
+        msg += f"- {name}: <b>{tokens['in'] + tokens['out']:,}</b> (In: {tokens['in']:,} / Out: {tokens['out']:,})\n"
         
     footer = "\n✅ 실시간 집계 결과입니다. 부장님!" if is_realtime else "\n✅ 부장님, 오늘도 알뜰하고 똑똑하게 AI를 운용하셨습니다! 👍"
     msg += footer
