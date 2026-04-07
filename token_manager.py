@@ -185,8 +185,8 @@ def get_daily_token_report_message(target_date=None, is_realtime=False):
                     for entry in data:
                         if entry.get("date") == target_date:
                             task = entry.get("task", "Unknown")
-                            t_in = entry.get("prompt", 0) # V19.5: 필드명 맞춤
-                            t_out = entry.get("candidate", 0)
+                            t_in = entry.get("input_tokens", 0)
+                            t_out = entry.get("output_tokens", 0)
                             
                             if task not in usage_by_task:
                                 usage_by_task[task] = {"in": 0, "out": 0}
