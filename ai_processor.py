@@ -4,6 +4,7 @@ import time
 import re
 import datetime
 import pytz
+import shutil
 
 from google import genai
 from google.genai import types
@@ -108,6 +109,35 @@ def _clean_ai_json(text):
     # 2. JSON 시작({)과 끝(}) 사이의 내용만 남깁니다. (찌꺼기 텍스트 방어)
     json_match = re.search(r'(\{.*\})', cleaned, re.DOTALL)
     return json_match.group(1) if json_match else cleaned
+
+def _log_ai_xray(task, system_instruction, contents, response_text=None):
+    """
+    [V28.0] AI 입출력 페이로드를 통합 장부(AI_DEBUG_LOG)에 기록하고,
+    10MB 초과 시 자동으로 .bak 파일로 밀어내어 용량을 관리하는 수호자 함수입니다.
+    """
+    try:
+        # [V28.1] 10MB(약 10,485,760 bytes) 용량 제한 감시 및 자동 세탁
+        if os.path.exists(AI_DEBUG_LOG) and os.path.getsize(AI_DEBUG_LOG) > 10 * 1024 * 1024:
+            shutil.move(AI_DEBUG_LOG, AI_DEBUG_LOG + ".bak")
+            logger.info("🧹 [디버그 로그 자동 세탁] 용량 초과로 기존 로그를 .bak로 밀어냈습니다.")
+
+        with open(AI_DEBUG_LOG, "a", encoding="utf-8") as f:
+            tz = pytz.timezone(USER_TIMEZONE)
+            now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"\n{'='*50}\n")
+            f.write(f"[X-RAY DEBUG: {task}] {now_str}\n")
+            f.write(f"{'-'*50}\n")
+            f.write(f"[1. SYSTEM_INSTRUCTION]\n{system_instruction or '(없음)'}\n")
+            f.write(f"{'-'*50}\n")
+            f.write(f"[2. CONTENTS]\n{contents}\n")
+            
+            if response_text:
+                f.write(f"{'-'*50}\n")
+                f.write(f"[3. AI_RESPONSE]\n{response_text}\n")
+            
+            f.write(f"{'='*50}\n")
+    except Exception as de:
+        logger.error(f"X-레이 통합 디버깅 기록 중 오류: {de}")
 
 # --- [기존 외부 호출 함수 리팩토링] ---
 
@@ -222,40 +252,15 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
             
             req_config = types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
 
-            # --- [X-RAY DEBUG START V14.5] --- 
-            try:
-                # [V14.5] 자동 다이어트 시스템 (10MB 제한)
-                if os.path.exists(AI_DEBUG_LOG) and os.path.getsize(AI_DEBUG_LOG) > 10 * 1024 * 1024:
-                    import shutil
-                    shutil.move(AI_DEBUG_LOG, AI_DEBUG_LOG + ".bak")
-                    logger.info("🧹 [디버그 청소] 로그 파일이 10MB를 초과하여 .bak로 밀어내고 새로 시작합니다.")
-
-                with open(AI_DEBUG_LOG, "a", encoding="utf-8") as f:
-                    tz = pytz.timezone(USER_TIMEZONE)
-                    now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-                    f.write(f"\n{'='*50}\n")
-                    f.write(f"[X-RAY DEBUG: process_email_with_ai] {now_str}\n")
-                    f.write(f"{'-'*50}\n")
-                    f.write(f"[SYSTEM_INSTRUCTION]\n{dynamic_prompt}\n")
-                    f.write(f"{'-'*50}\n")
-                    f.write(f"[CONTENTS]\n{final_text}\n")
-                    f.write(f"{'='*50}\n")
-            except Exception as de:
-                logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
-            # --- [X-RAY DEBUG END] ---
+            # [V28.0] 통합 X-Ray 로그 기록 (요청)
+            _log_ai_xray("process_email_with_ai", dynamic_prompt, final_text)
 
             # [V12.7] 단일 정예 엔진(AI_MODEL)으로 승부
             response = client.models.generate_content(model=AI_MODEL, contents=final_text, config=req_config)
             result = json.loads(_clean_ai_json(response.text))
 
-            # --- [X-RAY RESP DEBUG START V24.0] --- 
-            try:
-                with open(AI_DEBUG_LOG, "a", encoding="utf-8") as f:
-                    f.write(f"[AI_RESPONSE]\n{response.text}\n")
-                    f.write(f"{'='*50}\n")
-            except Exception as de:
-                logger.error(f"X-레이 응답 기록 중 오류: {de}")
-            # --- [X-RAY RESP DEBUG END] ---
+            # [V28.0] 통합 X-Ray 로그 기록 (응답 추가)
+            _log_ai_xray("process_email_with_ai", dynamic_prompt, final_text, response_text=response.text)
             
             # [V12.25] 실시간 토큰 사용량 기록 (입력/출력)
             if response.usage_metadata:
@@ -317,22 +322,8 @@ def extract_skip_rule_ai(subject: str, body: str, user_opinion: str = None) -> s
     if user_opinion:
         user_content += f"\n\n[부장님의 직접 의견]: {user_opinion}"
     
-    # --- [X-RAY DEBUG START V27.0] ---
-    try:
-        debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
-        with open(debug_log_path, "a", encoding="utf-8") as f:
-            tz = pytz.timezone(USER_TIMEZONE)
-            now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-            f.write(f"\n{'='*50}\n")
-            f.write(f"[X-RAY DEBUG: extract_skip_rule_ai] {now_str}\n")
-            f.write(f"{'-'*50}\n")
-            f.write(f"[SYSTEM_INSTRUCTION]\n{system_instr}\n")
-            f.write(f"{'-'*50}\n")
-            f.write(f"[USER_CONTENT]\n{user_content}\n")
-            f.write(f"{'='*50}\n")
-    except Exception as de:
-        logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
-    # --- [X-RAY DEBUG END] ---
+    # [V28.0] 통합 X-Ray 로그 기록
+    _log_ai_xray("extract_skip_rule_ai", system_instr, user_content)
 
     try:
         client = _get_ai_client()
@@ -353,6 +344,8 @@ def extract_skip_rule_ai(subject: str, body: str, user_opinion: str = None) -> s
                 prompt_text=f"{system_instr}\n\n[USER_CONTENT]\n{user_content}", 
                 response_text=response.text
             )
+            # [V28.0] 통합 X-Ray 로그 기록 (응답)
+            _log_ai_xray("extract_skip_rule_ai", system_instr, user_content, response_text=response.text)
             
         rule = response.text.strip() if response.text else "유형 파악 불가"
         return rule
@@ -391,22 +384,8 @@ def translate_news_title(vi_title: str) -> str:
                 ]
             )
 
-            # --- [X-RAY DEBUG START V27.0] ---
-            try:
-                debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
-                with open(debug_log_path, "a", encoding="utf-8") as f:
-                    tz = pytz.timezone(USER_TIMEZONE)
-                    now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-                    f.write(f"\n{'='*50}\n")
-                    f.write(f"[X-RAY DEBUG: translate_news_title] (시도 {current_attempt}/{max_retries}) {now_str}\n")
-                    f.write(f"{'-'*50}\n")
-                    f.write(f"[SYSTEM_INSTRUCTION]\n{system_instr}\n")
-                    f.write(f"{'-'*50}\n")
-                    f.write(f"[USER_CONTENT]\n{user_content}\n")
-                    f.write(f"{'='*50}\n")
-            except Exception as de:
-                logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
-            # --- [X-RAY DEBUG END] ---
+            # [V28.0] 통합 X-Ray 로그 기록
+            _log_ai_xray("translate_news_title", system_instr, user_content)
 
             # [V27.0] 정석 호출: 기계적 번역 엔진 부스트 모드 가동
             response = client.models.generate_content(
@@ -416,12 +395,8 @@ def translate_news_title(vi_title: str) -> str:
             )
             text = response.text if response.text else ""
 
-            # --- [X-RAY RESP DEBUG V25.0] --- 
-            try:
-                with open(debug_log_path, "a", encoding="utf-8") as f:
-                    f.write(f"[AI_RESPONSE]\n{text}\n")
-                    f.write(f"{'='*50}\n")
-            except Exception: pass
+            # [V28.0] 통합 X-Ray 로그 기록 (응답)
+            _log_ai_xray("translate_news_title", system_instr, user_content, response_text=text)
 
             if response.usage_metadata:
                 log_token(
@@ -496,22 +471,8 @@ def summarize_news_article(url: str) -> str:
                     # response_mime_type="text/plain" # 뉴스 요약은 자유로운 텍스트 형식을 유지합니다.
                 )
 
-                # --- [X-RAY DEBUG START V27.0] ---
-                try:
-                    debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
-                    with open(debug_log_path, "a", encoding="utf-8") as f:
-                        tz = pytz.timezone(USER_TIMEZONE)
-                        now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-                        f.write(f"\n{'='*50}\n")
-                        f.write(f"[X-RAY DEBUG: summarize_news_article] {now_str} (시도 {current_attempt}/{max_retries})\n")
-                        f.write(f"{'-'*50}\n")
-                        f.write(f"[SYSTEM_INSTRUCTION]\n{system_instr}\n")
-                        f.write(f"{'-'*50}\n")
-                        f.write(f"[USER_CONTENT]\n{user_content}\n")
-                        f.write(f"{'='*50}\n")
-                except Exception as de:
-                    logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
-                # --- [X-RAY DEBUG END] ---
+                # [V28.0] 통합 X-Ray 로그 기록 (요청)
+                _log_ai_xray("summarize_news_article", system_instr, user_content)
 
                 # [V27.0] 분리된 지침과 데이터를 바탕으로 응답 생성
                 response = client.models.generate_content(
@@ -521,12 +482,8 @@ def summarize_news_article(url: str) -> str:
                 )
                 text = response.text if response.text else ""
 
-                # --- [X-RAY RESP DEBUG V24.1] --- 
-                try:
-                    with open(debug_log_path, "a", encoding="utf-8") as f:
-                        f.write(f"[AI_RESPONSE]\n{text}\n")
-                        f.write(f"{'='*50}\n")
-                except Exception: pass
+                # [V28.0] 통합 X-Ray 로그 기록 (응답 추가)
+                _log_ai_xray("summarize_news_article", system_instr, user_content, response_text=text)
 
                 if response.usage_metadata:
                     log_token(
@@ -588,22 +545,8 @@ def route_intent(user_message: str) -> str:
         client = _get_ai_client()
         if not client: return "GENERAL_CHAT"
 
-        # --- [X-RAY DEBUG START] ---
-        try:
-            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
-            with open(debug_log_path, "a", encoding="utf-8") as f:
-                tz = pytz.timezone(USER_TIMEZONE)
-                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-                f.write(f"\n{'='*50}\n")
-                f.write(f"[X-RAY DEBUG: route_intent] {now_str}\n")
-                f.write(f"{'-'*50}\n")
-                f.write(f"[SYSTEM_INSTRUCTION]\n(없음)\n")
-                f.write(f"{'-'*50}\n")
-                f.write(f"[CONTENTS]\n{prompt}\n")
-                f.write(f"{'='*50}\n")
-        except Exception as de:
-            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
-        # --- [X-RAY DEBUG END] ---
+        # [V28.0] 통합 X-Ray 로그 기록
+        _log_ai_xray("route_intent", "(없음)", prompt)
 
         # 가장 빠르고 일관된 출력을 위해 temperature 최소화 설정
         response = client.models.generate_content(
@@ -611,6 +554,9 @@ def route_intent(user_message: str) -> str:
             contents=prompt,
              config=types.GenerateContentConfig(temperature=0.0)
         )
+        
+        # [V28.0] 통합 X-Ray 로그 기록 (응답 추가)
+        _log_ai_xray("route_intent", "(없음)", prompt, response_text=response.text)
         
         # [V12.25] 토큰 기록 (라우터 전용)
         if response.usage_metadata:
@@ -671,22 +617,8 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
         client = _get_ai_client()
         if not client: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
 
-        # --- [X-RAY DEBUG START] ---
-        try:
-            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
-            with open(debug_log_path, "a", encoding="utf-8") as f:
-                tz = pytz.timezone(USER_TIMEZONE)
-                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-                f.write(f"\n{'='*50}\n")
-                f.write(f"[X-RAY DEBUG: chat_with_secretary] {now_str}\n")
-                f.write(f"{'-'*50}\n")
-                f.write(f"[SYSTEM_INSTRUCTION]\n{chat_prompt}\n")
-                f.write(f"{'-'*50}\n")
-                f.write(f"[CONTENTS]\n{contents}\n")
-                f.write(f"{'='*50}\n")
-        except Exception as de:
-            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
-        # --- [X-RAY DEBUG END] ---
+        # [V28.0] 통합 X-Ray 로그 기록
+        _log_ai_xray("chat_with_secretary", chat_prompt, str(contents))
 
         # [혁신] 단일 메시지가 아닌 '누적된 대화 흐름(contents)' 전체를 바탕으로 응답을 생성합니다.
         response = client.models.generate_content(
@@ -695,6 +627,9 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
             config=types.GenerateContentConfig(system_instruction=chat_prompt)
         )
         
+        # [V28.0] 통합 X-Ray 로그 기록 (응답 추가)
+        _log_ai_xray("chat_with_secretary", chat_prompt, str(contents), response_text=response.text)
+
         # [V18.4] 토큰 로깅 정예화: 디버그 리포트 생성을 위해 프롬프트/답변 텍스트를 함께 넘깁니다.
         if response.usage_metadata:
             log_token(
@@ -725,27 +660,16 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
         client = _get_ai_client()
         if not client: return {"topics": [{"category": "오류", "items": ["API 연결 실패"]}]}
 
-        # --- [X-RAY DEBUG START] ---
-        try:
-            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
-            with open(debug_log_path, "a", encoding="utf-8") as f:
-                tz = pytz.timezone(USER_TIMEZONE)
-                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-                f.write(f"\n{'='*50}\n")
-                f.write(f"[X-RAY DEBUG: generate_daily_report_ai] {now_str}\n")
-                f.write(f"{'-'*50}\n")
-                f.write(f"[SYSTEM_INSTRUCTION]\n{dynamic_prompt}\n")
-                f.write(f"{'-'*50}\n")
-                f.write(f"[CONTENTS]\n{data_text}\n")
-                f.write(f"{'='*50}\n")
-        except Exception as de:
-            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
-        # --- [X-RAY DEBUG END] ---
+        # [V28.0] 통합 X-Ray 로그 기록 (요청)
+        _log_ai_xray("generate_daily_report_ai", dynamic_prompt, data_text)
 
         response = client.models.generate_content(
             model=AI_MODEL, contents=data_text,
             config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
         )
+
+        # [V28.0] 통합 X-Ray 로그 기록 (응답 추가)
+        _log_ai_xray("generate_daily_report_ai", dynamic_prompt, data_text, response_text=response.text)
         
         # [V12.25] 토큰 기록 (V18.4 오타 수정: prompt -> dynamic_prompt)
         if response.usage_metadata:
