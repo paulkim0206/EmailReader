@@ -10,7 +10,7 @@ from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, USER_TIMEZONE, 
 # 앞서 우리가 정성껏 만든 주요 도구들을 하나의 커다란 공장 상자로 불러옵니다!
 from mail_parser import fetch_recent_emails, save_processed_uid
 from ai_processor import process_email_with_ai, load_all_prompts_to_memory
-from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, escape_for_tg, send_failure_alert, clear_temp_cache
+from telegram_bot import send_email_alert, send_skip_alert, setup_telegram_handlers, set_bot_commands, escape_for_tg, send_failure_alert, clear_temp_cache
 from thread_manager import save_summary_entry, get_thread_msg_id
 from retry_queue_manager import add_to_retry_queue, get_pending_retries, remove_from_retry_queue, update_retry_status
 from report_manager import update_daily_report, generate_weekly_summary
@@ -291,6 +291,10 @@ async def main():
     
     # 봇이 사용자 스마트폰과 메시지를 언제든 주고받을 수 있게 인터넷 망과 연결합니다.
     await application.initialize()
+    
+    # [V19.6] 부장님이 요청하신 공식 '영문 명령어 메뉴' 업데이트 실행
+    await set_bot_commands(application)
+    
     await application.start()
     await application.updater.start_polling()
 

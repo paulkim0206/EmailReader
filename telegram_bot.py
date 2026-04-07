@@ -8,7 +8,7 @@ import os
 import subprocess
 import json
 import pytz
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, BotCommand
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, CommandHandler, MessageHandler, filters
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, TIMEZONE_FILE, USER_TIMEZONE
 
@@ -1212,6 +1212,29 @@ async def handle_shutdown_command(update: Update, context: ContextTypes.DEFAULT_
     await asyncio.sleep(1)
     os._exit(0)
 
+async def set_bot_commands(application: Application):
+    """
+    [V19.6] 텔레그램 공식 메뉴(/)에 나타날 영문 명령어 리스트를 등록합니다.
+    (부장님의 지침에 따라 오직 영문으로만 구성합니다.)
+    """
+    commands = [
+        BotCommand("status", "Check System Status"),
+        BotCommand("token", "Real-time AI Token Usage Today"),
+        BotCommand("help", "Get Help & Main Menu"),
+        BotCommand("note", "Add a New Quick Note"),
+        BotCommand("notelist", "View All Saved Notes"),
+        BotCommand("update", "Check and Apply System Patch"),
+        BotCommand("restart", "Reboot Peani System"),
+        BotCommand("time", "Current Time & Timezone"),
+        BotCommand("memory", "Manage Chat History Memory"),
+        BotCommand("shutdown", "Emergency System Shutdown (Manual Restart Required)")
+    ]
+    try:
+        await application.bot.set_my_commands(commands)
+        logger.info("✅ 텔레그램 공식 영문 명령어 메뉴가 성공적으로 업데이트되었습니다.")
+    except Exception as e:
+        logger.error(f"명령어 메뉴 등록 중 오류 발생: {e}")
+
 async def handle_token_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     [V19.5] 부장님의 실시간 토큰 조회를 처리합니다. (/token)
@@ -1238,7 +1261,6 @@ def setup_telegram_handlers(application: Application):
     application.add_handler(CommandHandler("memory", handle_memory_command))
     application.add_handler(CommandHandler("shutdown", handle_shutdown_command)) # [V17.2] 비상 종료
     application.add_handler(CommandHandler("token", handle_token_command))    # [V19.5] 실시간 토큰 조회
-    application.add_handler(CommandHandler("토큰", handle_token_command))      # [V19.5] 한글 명령어 지원
     
     application.add_handler(CallbackQueryHandler(handle_memory_callback, pattern="^memory_"))
     
