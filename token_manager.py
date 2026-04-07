@@ -147,14 +147,16 @@ def get_daily_token_usage(target_date=None):
         "request_count": count
     }
 
-def get_daily_token_report_message(target_date=None):
+def get_daily_token_report_message(target_date=None, is_realtime=False):
     """
     [V16.6] 부장님을 위한 '실속형 데일리 토큰 정산서'를 생성합니다.
-    카테고리별로 (In: XXX / Out: YYY) 상세 내역을 포함합니다.
+    [V19.5] 실시간 조회 모드 지원: 당일 00:00 ~ 현재 시각 범위를 명시합니다.
     """
+    tz = pytz.timezone(USER_TIMEZONE)
+    now = datetime.datetime.now(tz)
+    
     if not target_date:
-        tz = pytz.timezone(USER_TIMEZONE)
-        target_date = datetime.datetime.now(tz).strftime("%Y-%m-%d")
+        target_date = now.strftime("%Y-%m-%d")
     
     # 1. 카테고리별 합산 준비
     usage_by_task = {}
@@ -162,7 +164,7 @@ def get_daily_token_report_message(target_date=None):
     total_out = 0
     total_requests = 0
     
-    # 한글 이름 매핑
+    # 한글 이름 매핑 (V18.2 번역기 추가 등 반영)
     task_map = {
         "Mail_Summary": "📧 새 이메일 요약",
         "Intent_Router": "🕵️ 의도 분석 라우터",
@@ -183,8 +185,8 @@ def get_daily_token_report_message(target_date=None):
                     for entry in data:
                         if entry.get("date") == target_date:
                             task = entry.get("task", "Unknown")
-                            t_in = entry.get("input_tokens", 0)
-                            t_out = entry.get("output_tokens", 0)
+                            t_in = entry.get("prompt", 0) # V19.5: 필드명 맞춤
+                            t_out = entry.get("candidate", 0)
                             
                             if task not in usage_by_task:
                                 usage_by_task[task] = {"in": 0, "out": 0}
@@ -199,23 +201,32 @@ def get_daily_token_report_message(target_date=None):
             return None
 
     if total_requests == 0:
-        return None
+        return f"📊 <b>[{target_date}]</b>\n아직 집계된 토큰 사용 내역이 없습니다."
 
     # 2. 메시지 조립
-    msg = f"🪙 <b>[피아니] 오늘의 AI 토큰 정산서</b>\n"
-    msg += f"📅 <b>기준일:</b> {target_date}\n\n"
+    title = "🪙 <b>[피아니] 실시간 토큰 정산 보고</b>" if is_realtime else "🪙 <b>[피아니] 오늘의 AI 토큰 정산서</b>"
+    msg = f"{title}\n"
+    
+    # [V19.5] 정밀한 시간 범위 명시
+    if is_realtime:
+        current_time = now.strftime("%H:%M")
+        msg += f"📅 <b>집계 기간:</b> {target_date} (00:00 ~ {current_time} 현재)\n\n"
+    else:
+        msg += f"📅 <b>기준일:</b> {target_date}\n\n"
+        
     msg += f"📊 <b>전체 이용 현황</b>\n"
     msg += f"- 요청 건수: {total_requests}건\n"
     msg += f"- 총 사용량: <b>{total_in + total_out:,}</b> 💡 (In: {total_in:,} / Out: {total_out:,})\n\n"
     msg += f"📂 <b>카테고리별 지출 상세</b>\n"
     
-    # 지출이 많은 순서대로 정렬해서 보여드립니다.
+    # 지출이 많은 순서대로 정렬
     sorted_tasks = sorted(usage_by_task.items(), key=lambda x: (x[1]["in"] + x[1]["out"]), reverse=True)
     
     for task_id, tokens in sorted_tasks:
         name = task_map.get(task_id, task_id)
         msg += f"- {name}: <b>{tokens['in'] + tokens['out']:,}</b> 🪙 (In: {tokens['in']:,} / Out: {tokens['out']:,})\n"
         
-    msg += f"\n✅ 부장님, 오늘도 알뜰하고 똑똑하게 AI를 운용하셨습니다! 👍"
+    footer = "\n✅ 실시간 집계 결과입니다. 부장님!" if is_realtime else "\n✅ 부장님, 오늘도 알뜰하고 똑똑하게 AI를 운용하셨습니다! 👍"
+    msg += footer
     
     return msg

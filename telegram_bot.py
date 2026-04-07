@@ -1212,6 +1212,19 @@ async def handle_shutdown_command(update: Update, context: ContextTypes.DEFAULT_
     await asyncio.sleep(1)
     os._exit(0)
 
+async def handle_token_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    [V19.5] 부장님의 실시간 토큰 조회를 처리합니다. (/token)
+    """
+    if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
+    
+    from token_manager import get_daily_token_report_message
+    # 실시간 모드(is_realtime=True)로 오늘자 리포트 생성
+    token_msg = get_daily_token_report_message(is_realtime=True)
+    
+    if token_msg:
+        await update.message.reply_text(token_msg, parse_mode="HTML")
+
 def setup_telegram_handlers(application: Application):
     # 명령을 대기하는 두뇌 회로(수신기)에 '/status', '/note', '/update' 옵션을 박아 넣습니다.
     application.add_handler(CommandHandler("status", command_status))
@@ -1224,6 +1237,9 @@ def setup_telegram_handlers(application: Application):
     application.add_handler(CommandHandler("restart", handle_restart_command))
     application.add_handler(CommandHandler("memory", handle_memory_command))
     application.add_handler(CommandHandler("shutdown", handle_shutdown_command)) # [V17.2] 비상 종료
+    application.add_handler(CommandHandler("token", handle_token_command))    # [V19.5] 실시간 토큰 조회
+    application.add_handler(CommandHandler("토큰", handle_token_command))      # [V19.5] 한글 명령어 지원
+    
     application.add_handler(CallbackQueryHandler(handle_memory_callback, pattern="^memory_"))
     
     # [V7.0] 시간 시계 관리 명령어 (메뉴 호출 분리)
