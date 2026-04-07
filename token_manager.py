@@ -78,8 +78,8 @@ def log_token(task, prompt_tokens, candidate_tokens, prompt_text=None, response_
                 "News_Title_Translation": "🌐 뉴스 제목 번역"
             }.get(task, task)
             
-            # [V18.7] 의도 분석 라우터는 텔레그램 알림을 발송하지 않습니다. (장부 기록만 수행)
-            if task == "Intent_Router":
+            # [V18.9] 의도 분석 라우터 및 뉴스 번역은 알림을 발송하지 않습니다.
+            if task in ["Intent_Router", "News_Title_Translation"]:
                 return
 
             # [V17.5] 텔레그램 경보 메시지 페이로드 구성
