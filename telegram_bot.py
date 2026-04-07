@@ -333,19 +333,24 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer("⚠️ 세션이 만료되어 기사 링크를 찾을 수 없습니다.", show_alert=True)
             return
             
-        # 1. [V19.1] 원본 메시지에서 이미 번역된 제목 및 정보 추출 (파이썬 로직 - 0토큰)
-        # 🇰🇷, 🇻🇳 아이콘이 포함된 행을 찾아 제목 섹션을 그대로 재사용합니다.
+        # 1. [V19.2] 원본 알림에서 제목 정보만 정밀하게 추출 (가독성 튜닝)
         original_msg = query.message.text
         extracted_info = []
         for line in original_msg.split('\n'):
             line = line.strip()
-            if line.startswith(('🇰🇷', '🇻🇳', '<i>(')):
-                # HTML 태그가 벗겨진 상태이므로, 가독성을 위해 다시 간단히 강조를 입힙니다.
-                if line.startswith('🇰🇷'): line = f"<b>{line}</b>"
-                elif line.startswith('🇻🇳'): line = f"<i>{line}</i>"
-                extracted_info.append(line)
+            # 헤더([베트남 뉴스 속보]) 및 불필요한 공백은 건너뜁니다.
+            if not line or "뉴스 속보" in line: continue
+            
+            if line.startswith('🇰🇷'): 
+                extracted_info.append(f"<b>{line}</b>")
+            elif line.startswith('🇻🇳'): 
+                # [V19.2] 베트남어 제목 뒤에 엔터(\n)를 한 번 더 넣어 시각적 여유를 둡니다.
+                extracted_info.append(f"<i>{line}</i>\n")
+            elif line.startswith('('): 
+                # 발행일자 처리
+                extracted_info.append(f"<i>{line}</i>")
         
-        title_section = "\n".join(extracted_info) if extracted_info else "뉴스 제목을 불러올 수 없습니다."
+        title_section = "\n".join(extracted_info) if extracted_info else "뉴스 정보 추출 실패"
 
         # 2. 상단 팝업(Toast) 알림 송신 (대기 안내)
         await query.answer("⏳ 기사를 정독하고 있습니다... (약 10~20초 소요)", show_alert=False)
