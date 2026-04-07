@@ -336,6 +336,11 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         # 1. 상단 팝업(Toast) 알림 송신 (대기 안내)
         await query.answer("⏳ 요약본을 준비하고 있습니다... (약 10~20초 소요)", show_alert=False)
         
+        # [V19.4] 버튼 즉시 제거: 지시가 내려졌으므로 기존 버튼은 더 이상 필요 없습니다.
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+        except Exception: pass
+        
         try:
             from ai_processor import summarize_news_article
             # AI 요약 실행 (업데이트된 '제목 제외' 프롬프트 사용)
