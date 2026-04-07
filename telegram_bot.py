@@ -324,41 +324,55 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer(text="⚠️ 해당 기능(메일 원본 저장)은 부장님 지시로 폐지되었습니다.", show_alert=True)
         return
 
-    # [V17.0] 베트남 뉴스 기사 요약 처리
+    # [V19.1] 베트남 뉴스 기사 요약 처리 (제로-토큰 제목 재활용 버전)
     elif data.startswith("rss_sum_"):
         url_hash = data.replace("rss_sum_", "")
         url = RSS_URL_MAP.get(url_hash)
         
         if not url:
-            await query.answer("⚠️ 세션이 만료되어 기사 링크를 찾을 수 없거나 이미 분석되었습니다.", show_alert=True)
+            await query.answer("⚠️ 세션이 만료되어 기사 링크를 찾을 수 없습니다.", show_alert=True)
             return
             
-        await query.answer("⏳ 베트남 뉴스를 분석하여 한국어로 요약 중입니다...")
+        # 1. [V19.1] 원본 메시지에서 이미 번역된 제목 및 정보 추출 (파이썬 로직 - 0토큰)
+        # 🇰🇷, 🇻🇳 아이콘이 포함된 행을 찾아 제목 섹션을 그대로 재사용합니다.
+        original_msg = query.message.text
+        extracted_info = []
+        for line in original_msg.split('\n'):
+            line = line.strip()
+            if line.startswith(('🇰🇷', '🇻🇳', '<i>(')):
+                # HTML 태그가 벗겨진 상태이므로, 가독성을 위해 다시 간단히 강조를 입힙니다.
+                if line.startswith('🇰🇷'): line = f"<b>{line}</b>"
+                elif line.startswith('🇻🇳'): line = f"<i>{line}</i>"
+                extracted_info.append(line)
         
-        # '요약 중...' 상태를 부장님께 알림
-        original_text = query.message.text
-        # [V12.16] 텔레그램 메시지 편집 (상태 업뎃)
+        title_section = "\n".join(extracted_info) if extracted_info else "뉴스 제목을 불러올 수 없습니다."
+
+        # 2. 상단 팝업(Toast) 알림 송신 (대기 안내)
+        await query.answer("⏳ 기사를 정독하고 있습니다... (약 10~20초 소요)", show_alert=False)
+        
+        # 3. 기존 말풍선 즉시 슬림화 (채팅창 다이어트)
         try:
             await query.edit_message_text(
-                f"{original_text}\n\n"
-                f"━━━━━━━━━━━━━━━\n"
-                f"🔄 <b>피아니가 기사를 정독하고 있습니다...</b> (10~20초 소요)",
+                "🔄 <b>기사를 요약 중입니다...</b>",
                 parse_mode="HTML"
             )
         except Exception: pass
         
         try:
             from ai_processor import summarize_news_article
-            # AI 요약 실행 (실제 웹 스크래핑 포함)
+            # AI 요약 실행 (업데이트된 '제목 제외' 프롬프트 사용 명령)
             summary = await asyncio.to_thread(summarize_news_article, url)
             
-            # 요약 결과로 메시지 업데이트
-            await query.edit_message_text(
-                f"{original_text}\n\n"
-                f"━━━━━━━━━━━━━━━\n"
-                f"📝 <b>한글 요약 보고</b>\n\n"
-                f"{summary}\n\n"
-                f"🔗 <a href='{url}'>[기사 원문 보기]</a>",
+            # 4. [V19.1] 가로챈 제목 + AI 요약본 합체하여 새로운 메시지로 발송 (토큰 대폭 절감)
+            await context.bot.send_message(
+                chat_id=query.message.chat_id,
+                text=(
+                    f"📝 <b>[베트남 뉴스 요약 보고]</b>\n\n"
+                    f"{title_section}\n"  # 파이썬이 추출한 기존 제목 재활용
+                    f"━━━━━━━━━━━━━━━\n\n"
+                    f"{summary}\n\n"
+                    f"🔗 <a href='{url}'>[기사 원문 보기]</a>"
+                ),
                 parse_mode="HTML",
                 disable_web_page_preview=True
             )
@@ -366,7 +380,8 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             logger.error(f"뉴스 요약 처리 중 오류: {e}")
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
-                text=f"❌ <b>뉴스 요약 실패:</b> 원문을 가져와 분석하는 중 오류가 발생했습니다.\n{url}"
+                text=f"❌ <b>뉴스 요약 실패:</b> 기사 분석 중 오류가 발생했습니다.\n{url}",
+                parse_mode="HTML"
             )
         return
             
