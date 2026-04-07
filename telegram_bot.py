@@ -1209,28 +1209,43 @@ async def handle_shutdown_command(update: Update, context: ContextTypes.DEFAULT_
 
 async def set_bot_commands(application: Application):
     """
-    [V19.6] 텔레그램 공식 메뉴(/)에 나타날 영문 명령어 리스트를 등록합니다.
-    (부장님의 지침에 따라 오직 영문으로만 구성합니다.)
+    [V26.0] 텔레그램 공식 메뉴(/)를 prompts/telegram_commands.txt 파일 내용과 동기화합니다.
+    이제 부장님이 소스 코드를 건드리지 않고 메모장(.txt)만 고쳐도 메뉴가 실시간으로 바뀝니다!
     """
-    commands = [
-        BotCommand("status", "봇 서버 상태 확인 및 하단 메뉴 활성화"),
-        BotCommand("token", "오늘 AI 토큰 실시간 사용량 조회"),
-        BotCommand("help", "도움말 및 하단 고정 메뉴 호출"),
-        BotCommand("note", "새로운 메모를 수첩에 즉시 기록"),
-        BotCommand("notelist", "저장된 노트 목록 인라인 메뉴 호출"),
-        BotCommand("notedel", "메모 번호(ID)로 즉시 삭제"),
-        BotCommand("notebackup", "수첩 백업 장부 파일 다운로드"),
-        BotCommand("update", "최신 코드 패치 적용 및 자동 재시작"),
-        BotCommand("restart", "서버 즉시 재부팅"),
-        BotCommand("memory", "대화 기억 현황 조회 및 초기화"),
-        BotCommand("time", "현재 시각 및 타임존 확인"),
-        BotCommand("shutdown", "서버 즉시 강제 종료")
-    ]
+    import os
+    from telegram import BotCommand
+    
+    # 마스터 명령어 파일 경로 설정
+    prompt_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts", "telegram_commands.txt")
+    commands = []
+    
     try:
-        await application.bot.set_my_commands(commands)
-        logger.info("✅ 텔레그램 공식 영문 명령어 메뉴가 성공적으로 업데이트되었습니다.")
+        if os.path.exists(prompt_path):
+            with open(prompt_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    # '/커맨드 [인자] : 설명' 형식을 지능적으로 파싱
+                    if line.startswith("/") and ":" in line:
+                        parts = line.split(":", 1)
+                        # "/notedel [번호]" -> ["/notedel", "[번호]"] -> "notedel" 추출
+                        cmd_raw = parts[0].strip().split()[0].replace("/", "")
+                        description = parts[1].strip()
+                        
+                        if cmd_raw and description:
+                            # 텔레그램 명령어 규칙 준수 (3~32자, 설명은 256자 이내)
+                            if 2 <= len(cmd_raw) <= 32:
+                                commands.append(BotCommand(cmd_raw, description[:100])) # 메뉴 가독성을 위해 100자로 제한
+            
+            if commands:
+                await application.bot.set_my_commands(commands)
+                logger.info(f"✅ [V26.0] 마스터 파일에서 {len(commands)}개의 명령어를 성공적으로 동기화하여 메뉴를 업데이트했습니다.")
+            else:
+                logger.warning("⚠️ 명령어 파일에 유효한 커맨드(/명칭 : 설명)가 없어 메뉴 업데이트를 건너뜁니다.")
+        else:
+            logger.error(f"🚨 명령어 마스터 파일({prompt_path})을 찾을 수 없습니다.")
+            
     except Exception as e:
-        logger.error(f"명령어 메뉴 등록 중 오류 발생: {e}")
+        logger.error(f"명령어 메뉴 등록 중 치명적 오류 발생: {e}")
 
 async def handle_token_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
