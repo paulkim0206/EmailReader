@@ -530,6 +530,10 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
         else:
             return "🚨 앗, 부장님! 방금 머릿속에 안개가 낀 것처럼 답변이 떠오르지 않습니다. 다시 한번 말씀해 주시겠어요?"
 
+    except Exception as e:
+        logger.error(f"지능형 대화 엔진 오류: {e}")
+        return "🚨 앗, 부장님! 방금 머릿속에 기억들이 꼬여서 잠시 멍해졌습니다. 다시 말씀해 주시겠어요?"
+
 def generate_daily_report_ai(raw_summaries: list) -> dict:
     """[V11.8] 일일 보고서 전용 지침(daily_strategy)을 사용하여 고객사별 요약을 생성합니다."""
     if not GEMINI_API_KEY or not raw_summaries: return {"report": "데이터 부족"}
