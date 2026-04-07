@@ -63,11 +63,10 @@ def load_all_prompts_to_memory():
     
     # 2. [V12.13] 베이스 지침서 사전 조립 (Pre-assembly)
     # 메일 분석 시 매번 조립하지 않고, 미리 완성된 지침서를 메모리에 들고 있게 합니다.
+    # [V21.2 다이어트] 이메일 요약은 summarizer.txt 단독으로도 충분하므로 페르소나를 제외합니다.
     global _BASE_SUMMARIZER_PROMPT
-    persona = _read_prompt_file("peani_persona.txt")
-    summarizer = _read_prompt_file("summarizer.txt", subfolder="abilities")
-    _BASE_SUMMARIZER_PROMPT = f"{persona}\n\n{summarizer}"
-    logger.info("⚡ 요약 전문가용 베이스 지침서 사전 조립 완료!")
+    _BASE_SUMMARIZER_PROMPT = _read_prompt_file("summarizer.txt", subfolder="abilities")
+    logger.info("⚡ 요약 전문가용 초슬림 베이스 지침서 사전 조립 완료!")
 
 def _read_prompt_file(filename, subfolder=None):
     """
@@ -163,9 +162,10 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
         }
 
     # 1. [V12.13] 이미 조립된 '완성형 지침서'를 즉시 가져옵니다.
+    # [V21.2 다이어트] 이메일 요약은 페르소나 없이 summarizer 단독으로 수행합니다.
     dynamic_prompt = _BASE_SUMMARIZER_PROMPT
     if not dynamic_prompt: # 만약 초기화 전이라면 실시간 조립
-        dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('summarizer')}"
+        dynamic_prompt = load_ability('summarizer')
     
     try:
         from feedback_manager import load_preferences, load_corrections
@@ -390,13 +390,11 @@ def summarize_news_article(url: str) -> str:
         if not article_text:
             return "❌ 기사 본문 내용을 추출할 수 없습니다. (사이트 구조 변경 가능성)"
 
-        # [V17.8] 피아니 정체성 및 현재 시각 정보 이식
-        persona = _read_prompt_file('peani_persona.txt')
+        # [V17.8/V21.2 다이어트] 뉴스 요약은 news_summarizer 단독으로 수행 (페르소나 제외)
         now_info = _get_now_info()
         ability_prompt = load_ability('news_summarizer')
         
         prompt = (
-            f"{persona}\n\n"
             f"{ability_prompt}\n"
             f"{now_info}\n\n"
             f"대상 기사 URL: {url}\n"
@@ -520,12 +518,14 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
     """
     if not GEMINI_API_KEY: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
 
-    # 1. 수석 비서용 정체성 조립 (System Persona)
-    chat_prompt = _read_prompt_file("peani_persona.txt")
-    
-    # [새로운 아키텍처] 의도(Intent)에 따라 필요한 '기능형 스위치 프롬프트'만 이식하여 토큰을 절약합니다!
+    # [V21.5/V21.6 다이어트 및 정리] 필요한 프롬프트만 전략적으로 결합합니다.
     if intent == "REPORT_WORK":
-        chat_prompt += f"\n\n{load_ability('report_trigger')}"
+        # 보고서 업무 지시: 정체성(Persona)마저 완전히 걷어내고 오직 트리거만 로드 (V21.5)
+        chat_prompt = load_ability('report_trigger')
+    else:
+        # 그 외 모든 대화: 뼈대(Persona) + 대화 정체성(Chat Persona) 장착 (V21.6)
+        chat_prompt = _read_prompt_file("peani_persona.txt")
+        chat_prompt += f"\n\n{load_ability('chat_persona')}"
         
     chat_prompt += _get_now_info()
 
@@ -600,8 +600,8 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
     """[V11.8] 일일 보고서 전용 지침(daily_strategy)을 사용하여 고객사별 요약을 생성합니다."""
     if not GEMINI_API_KEY or not raw_summaries: return {"report": "데이터 부족"}
 
-    # 일일 보고서 전용 지침으로 교체 (더 슬림하고 명확한 비즈니스 분석 수행)
-    dynamic_prompt = f"{_read_prompt_file('peani_persona.txt')}\n\n{load_ability('daily_strategy')}"
+    # [V11.8/V21.2 다이어트] 일일 보고서는 전용 지침(daily_strategy) 단독으로 수행 (페르소나 제외)
+    dynamic_prompt = load_ability('daily_strategy')
     # [V12.17] 장부에 저장된 진짜 고객사명(client)을 제공하여 AI의 오판을 방지합니다.
     data_text = "\n".join([f"고객사: {i['client']} | 제목: {i['subject']} | 요약: {i['summary']}" for i in raw_summaries])
 
