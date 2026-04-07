@@ -559,7 +559,7 @@ def _fallback_response():
     """[V12.7] 실시간 시도가 모두 실패했을 때 부장님께 드리는 전문적인 보고"""
     return {
         "status": "알림", "is_ai_error": True, "is_thread": False,
-        "summary": "⚠️ <b>[피아니 일시 지연]</b> AI 서버 응답 지연으로 실시간 분석을 중단했습니다. 5분 뒤 배경에서 마지막 1회 추가 요약 시도를 진행하겠습니다."
+        "summary": "⚠️ [피아니 일시 지연] AI 서버 응답 지연으로 실시간 분석을 중단했습니다. 5분 뒤 배경에서 마지막 1회 추가 요약 시도를 진행하겠습니다."
     }
 
 def route_intent(user_message: str) -> str:
