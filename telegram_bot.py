@@ -1214,17 +1214,17 @@ async def set_bot_commands(application: Application):
     """
     commands = [
         BotCommand("status", "봇 서버 상태 확인 및 하단 메뉴 활성화"),
-        BotCommand("token", "오늘 AI 토큰 실시간 사용량 조회 (00:00 ~ 현재)"),
+        BotCommand("token", "오늘 AI 토큰 실시간 사용량 조회"),
         BotCommand("help", "도움말 및 하단 고정 메뉴 호출"),
         BotCommand("note", "새로운 메모를 수첩에 즉시 기록"),
         BotCommand("notelist", "저장된 노트 목록 인라인 메뉴 호출"),
         BotCommand("notedel", "메모 번호(ID)로 즉시 삭제"),
         BotCommand("notebackup", "수첩 백업 장부 파일 다운로드"),
         BotCommand("update", "최신 코드 패치 적용 및 자동 재시작"),
-        BotCommand("restart", "서버 즉시 재부팅 (코드 업데이트 없음)"),
+        BotCommand("restart", "서버 즉시 재부팅"),
         BotCommand("memory", "대화 기억 현황 조회 및 초기화"),
         BotCommand("time", "현재 시각 및 타임존 확인"),
-        BotCommand("shutdown", "서버 즉시 강제 종료 (비상용)")
+        BotCommand("shutdown", "서버 즉시 강제 종료")
     ]
     try:
         await application.bot.set_my_commands(commands)
