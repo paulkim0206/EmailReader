@@ -87,10 +87,10 @@ def log_token(task, prompt_tokens, candidate_tokens, prompt_text=None, response_
             
             if is_high_token:
                 msg_data["text"] = (
-                    f"🚨 <b>[토큰 사용량 레드라인 경보]</b> 🚨\n\n"
+                    f"🚨 <b>[토큰 레드라인 경보]</b> 🚨\n\n"
                     f"🎯 <b>위험 작업:</b> {task_kr}\n"
                     f"🔥 <b>총 사용량: {total_tokens:,} 토큰</b>\n"
-                    f"📥 {prompt_tokens:,} / 📤 {candidate_tokens:,}\n\n"
+                    f"📥 입력: {prompt_tokens:,} / 📤 출력: {candidate_tokens:,}\n\n"
                     f"📢 <b>부장님!</b> 단일 호출 비용이 1만 토큰을 초과했습니다.\n"
                     f"아래 [다운로드] 버튼을 눌러 통합 진단 장부를 확인하시거나, "
                     f"비정상 동작이면 <b>/shutdown</b> 명령어로 전원을 차단하십시오! 🔌"
@@ -103,9 +103,8 @@ def log_token(task, prompt_tokens, candidate_tokens, prompt_text=None, response_
                 }
             else:
                 msg_data["text"] = (
-                    f"🪙 <b>[실시간 토큰 알림]</b>\n\n"
                     f"🎯 <b>작업:</b> {task_kr}\n"
-                    f"📥 {prompt_tokens or 0} / 📤 {candidate_tokens or 0} 토큰"
+                    f"📥 입력: {prompt_tokens or 0} / 📤 출력: {candidate_tokens or 0} 토큰"
                 )
             
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
