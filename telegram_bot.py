@@ -461,8 +461,45 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         return
 
     # [새로운 분기 3] 사용자가 AI 학습(👎) 단추를 눌렀을 때!!
-    elif data.startswith("learn_"):
+    elif data.startswith("learn_"): # [Step 4 Update]
         uid = data.split("_")[1]
+        
+        # [V12.20] 클릭 즉시 버튼을 가려 반응 속도 향상
+        try: await query.edit_message_reply_markup(reply_markup=None)
+        except Exception: pass
+        
+        # [V27.0] 즉시 학습 대신, 부장님의 고견을 먼저 여쭤봅니다 (양방향 학습 모드 가동)
+        from telegram import ForceReply
+        from thread_manager import find_entry_by_uid
+        
+        # 대상 메일의 최소한의 정보를 확보하여 어떤 메일에 대한 질문인지 명시합니다.
+        info = find_entry_by_uid(uid)
+        subject = None
+        
+        cache_data = temp_mail_cache.get(uid)
+        if cache_data:
+            subject = cache_data["mail"].get("subject")
+        if info:
+            subject = subject or info.get("thread_key")
+            
+        if not subject and uid:
+            from mail_parser import fetch_parsed_mail
+            mail_data = await asyncio.to_thread(fetch_parsed_mail, uid)
+            if mail_data:
+                subject = mail_data.get("subject")
+
+        await context.bot.send_message(
+            chat_id=query.message.chat_id,
+            text=(
+                f"🧠 <b>[스킵 규칙 학습: {uid}]</b>\n\n"
+                f"부장님, 이 메일을 왜 제외하시는지 짧은 의견을 주시면 피아니가 더 정확하게 배울게요! (이 메시지에 답글)\n"
+                f"<b>대상:</b> <code>{escape_for_tg(subject or '제목 없음')}</code>"
+            ),
+            parse_mode="HTML",
+            reply_markup=ForceReply(selective=True)
+        )
+        await query.answer(text="🫡 부장님의 의견을 기다리고 있습니다.")
+        return
 
         # [V12.20] 체감 속도 최적화: 클릭 즉시 버튼을 가려 부장님께 즉각적인 반응을 보여줍니다.
         try: await query.edit_message_reply_markup(reply_markup=None)
@@ -1071,6 +1108,58 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     await show_memo_interface(update, context, view_mode="main")
                 else:
                     await update.message.reply_text(f"🚨 {memo_id}번 노트 수정에 실패했습니다.")
+            return
+
+        # 3. [V27.0] 스킵 규칙 학습 처리 (양방향 학습 모드)
+        elif "[스킵 규칙 학습:" in replied_msg:
+            match = re.search(r'\[스킵 규칙 학습: (\w+)\]', replied_msg)
+            if match:
+                uid = match.group(1)
+                user_opinion = user_text.strip()
+                
+                await update.message.reply_text("⏳ 부장님의 의견을 반영하여 지능적으로 학습 중입니다... 잠시만 기다려 주세요! 🫡")
+                
+                # 1. 메일 정보 확보 (learn_ 로직 재사용)
+                from thread_manager import find_entry_by_uid
+                from feedback_manager import add_learning_preference
+                from ai_processor import extract_skip_rule_ai
+                
+                info = find_entry_by_uid(uid)
+                subject = None
+                summary = None
+                body = ""
+                
+                cache_data = temp_mail_cache.get(uid)
+                if cache_data:
+                    subject = cache_data["mail"].get("subject")
+                    body = cache_data["mail"].get("body", "")
+                if info:
+                    subject = subject or info.get("thread_key")
+                    summary = info.get("summary")
+                if not body and uid:
+                    from mail_parser import fetch_parsed_mail
+                    mail_data = await asyncio.to_thread(fetch_parsed_mail, uid)
+                    if mail_data:
+                        subject = subject or mail_data.get("subject")
+                        body = mail_data.get("body", "")
+
+                if subject:
+                    # [V27.0] 사용자의 직접 의견을 포함하여 AI 분석 요청
+                    reason = await asyncio.to_thread(extract_skip_rule_ai, subject, body, user_opinion)
+                    success, msg = add_learning_preference(subject, summary or "요약 없음", reason, user_opinion)
+                    
+                    if success:
+                        await update.message.reply_text(
+                            f"🧠 <b>요약 제외 및 규칙 학습 완료!</b>\n\n"
+                            f"👤 <b>부장님의 의견:</b>\n<i>{escape_for_tg(user_opinion)}</i>\n\n"
+                            f"📝 <b>파악된 최종 스킵 규칙:</b>\n<code>{escape_for_tg(reason)}</code>\n\n"
+                            f"앞으로 부장님의 의중을 받들어 유사한 메일은 스킵하겠습니다. ✨",
+                            parse_mode="HTML"
+                        )
+                    else:
+                        await update.message.reply_text(f"ℹ️ {msg}")
+                else:
+                    await update.message.reply_text("⚠️ 정보를 찾을 수 없습니다. 학습에 실패했습니다.")
             return
 
 

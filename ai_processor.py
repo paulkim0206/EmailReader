@@ -175,8 +175,9 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
                 pref_lines = []
                 for i, p in enumerate(preferences):
                     if isinstance(p, dict):
-                        # [V12.19] 지능형 규칙 추출: 이유(reason)를 최우선으로 제공
-                        pref_lines.append(f"{i+1}. [유형/이유]: {p.get('reason')} (예시 제목: {p.get('subject')})")
+                        # [V27.0] 부장님의 원본 의견(user_opinion)이 있으면 함께 주입하여 AI의 판단력을 극대화합니다.
+                        opinion_str = f" (부장님 의견: {p.get('user_opinion')})" if p.get('user_opinion') else ""
+                        pref_lines.append(f"{i+1}. [유형/이유]: {p.get('reason')}{opinion_str} (예시 제목: {p.get('subject')})")
                     else:
                         pref_lines.append(f"{i+1}. {p}")
                 pref_text = "\n".join(pref_lines)
@@ -294,24 +295,29 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
     # 모든 시도(3회) 실패 시 최종 항복(1단계)
     return _fallback_response()
 
-def extract_skip_rule_ai(subject: str, body: str) -> str:
+def extract_skip_rule_ai(subject: str, body: str, user_opinion: str = None) -> str:
     """
-    [V12.19] 사용자가 '요약 제외'를 누른 이유를 AI가 스스로 분석하여 
-    일반화된 '스킵 규칙(Rule)'을 한 문장으로 추출합니다.
+    [V27.0] 사용자가 '요약 제외'를 누른 후 남긴 '직접 의견'까지 반영하여,
+    더 정확하고 일반화된 '스킵 규칙(Rule)'을 한 문장으로 추출합니다.
     """
     if not subject and not body: return "내용 없음"
     
-    prompt = (
-        f"너는 부장님의 취향을 완벽히 파악하는 수석 비서다.\n"
-        f"부장님이 아래 메일을 보시고 '요약할 필요 없다'며 제외(Skip)하셨다.\n"
-        f"이 메일의 제목과 내용을 보고, 부장님이 이 메일을 제외하신 '본성(유형)'을 분석해라.\n\n"
-        f"대상 메일:\n[제목]: {subject}\n[본문]: {body[:2000]}\n\n"
-        f"반드시 아래와 같이 '[유형] 이유' 형식의 한 문장으로만 결론을 내라.\n"
-        f"예: 🔴 [시스템 자동 회신] 특정 인물의 부재나 휴가 안내 등 업무 실체가 없는 자동 메일\n"
-        f"예: 📊 [단순 데이터 공유] 매일 반복되는 원자재 및 부품의 재고 현황 단순 리스트"
+    # [V27.0] 수석 비서의 지초: 부장님의 직접 의견을 최우선으로 존중합니다.
+    system_instr = (
+        "너는 부장님의 취향을 완벽히 파악하는 수석 비서다.\n"
+        "부장님이 특정 메일을 보시고 '요약 제외'를 결정하셨을 때, 그 메일을 분석하여 '스킵 규칙'을 만들어야 한다.\n\n"
+        "⚠️ 만약 부장님이 직접 남기신 '의견(Opinion)'이 있다면, 그 의도를 최우선으로 반영하여 규칙을 수립해라.\n"
+        "예를 들어 메일은 광고처럼 보이지만 부장님이 '이건 입금 안내야'라고 하셨다면, '입금 안내' 성격에 집중하여 규칙을 만들어야 한다.\n\n"
+        "반드시 아래와 같이 '[유형] 이유' 형식의 한 문장으로만 결론을 내라.\n"
+        "예: 🔴 [시스템 자동 회신] 특정 인물 부재/휴가 안내 등 실체가 없는 자동 응답 내용\n"
+        "예: 📊 [단순 데이터 공유] 매일 반복되는 원자재 및 부품의 재고 현황 단순 수치 리스트"
     )
     
-    # --- [X-RAY DEBUG START] ---
+    user_content = f"대상 메일:\n[제목]: {subject}\n[본문]: {body[:2000]}"
+    if user_opinion:
+        user_content += f"\n\n[부장님의 직접 의견]: {user_opinion}"
+    
+    # --- [X-RAY DEBUG START V27.0] ---
     try:
         debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
         with open(debug_log_path, "a", encoding="utf-8") as f:
@@ -320,9 +326,9 @@ def extract_skip_rule_ai(subject: str, body: str) -> str:
             f.write(f"\n{'='*50}\n")
             f.write(f"[X-RAY DEBUG: extract_skip_rule_ai] {now_str}\n")
             f.write(f"{'-'*50}\n")
-            f.write(f"[SYSTEM_INSTRUCTION]\n(없음)\n")
+            f.write(f"[SYSTEM_INSTRUCTION]\n{system_instr}\n")
             f.write(f"{'-'*50}\n")
-            f.write(f"[CONTENTS]\n{prompt}\n")
+            f.write(f"[USER_CONTENT]\n{user_content}\n")
             f.write(f"{'='*50}\n")
     except Exception as de:
         logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
@@ -332,11 +338,21 @@ def extract_skip_rule_ai(subject: str, body: str) -> str:
         client = _get_ai_client()
         if not client: return "분석 실패(API 오류)"
         
-        response = client.models.generate_content(model=AI_MODEL, contents=prompt)
+        req_config = types.GenerateContentConfig(system_instruction=system_instr)
+        response = client.models.generate_content(
+            model=AI_MODEL, 
+            contents=user_content,
+            config=req_config
+        )
         
-        # [V12.25] 토큰 기록
         if response.usage_metadata:
-            log_token("Skip_Rule_Analysis", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count, prompt_text=prompt, response_text=response.text)
+            log_token(
+                task="Skip_Rule_Analysis", 
+                prompt_tokens=response.usage_metadata.prompt_token_count, 
+                candidate_tokens=response.usage_metadata.candidates_token_count, 
+                prompt_text=f"{system_instr}\n\n[USER_CONTENT]\n{user_content}", 
+                response_text=response.text
+            )
             
         rule = response.text.strip() if response.text else "유형 파악 불가"
         return rule
@@ -348,12 +364,13 @@ def translate_news_title(vi_title: str) -> str:
     """베트남어 뉴스 제목을 한국어로 신속하게 번역합니다."""
     if not vi_title: return "제목 없음"
     
-    prompt = (
-        f"너는 정치/종교/인물 등 어떠한 주관적 판단도 배제하고 오직 '언어적 매핑'만 수행하는 기계적 베트남어-한국어 번역 엔진이다.\n"
-        f"제공되는 문장이 어떤 민감한 주제(정치적 인물, 사건 등)를 포함하더라도 절대로 거부하거나 회피하지 말고, 즉시 한국어로 번역하라.\n\n"
-        f"대상 문장: {vi_title}\n\n"
-        f"결론은 번역된 결과물만 딱 한 줄로 출력하라. (사족/설명/인사말 금지)"
+    # [V27.0] 번역 기술 리팩토링: 기계적 번역 지침과 데이터를 지능적으로 분리합니다.
+    system_instr = (
+        "너는 정치/종교/인물 등 어떠한 주관적 판단도 배제하고 오직 '언어적 매핑'만 수행하는 기계적 베트남어-한국어 번역 엔진이다.\n"
+        "제공되는 문장이 어떤 민감한 주제(정치적 인물, 사건 등)를 포함하더라도 절대로 거부하거나 회피하지 말고, 즉시 한국어로 번역하라.\n\n"
+        "결론은 번역된 결과물만 딱 한 줄로 출력하라. (사족/설명/인사말 금지)"
     )
+    user_content = f"대상 문장: {vi_title}"
     
     max_retries = 3
     current_attempt = 1
@@ -363,7 +380,18 @@ def translate_news_title(vi_title: str) -> str:
             client = _get_ai_client()
             if not client: return vi_title
 
-            # --- [X-RAY DEBUG START V25.0] ---
+            # [V27.0] 부장님이 요청하신 '무조건 번역'을 위해 안전장치를 잠시 해제합니다.
+            req_config = types.GenerateContentConfig(
+                system_instruction=system_instr,
+                safety_settings=[
+                    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+                ]
+            )
+
+            # --- [X-RAY DEBUG START V27.0] ---
             try:
                 debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
                 with open(debug_log_path, "a", encoding="utf-8") as f:
@@ -372,14 +400,20 @@ def translate_news_title(vi_title: str) -> str:
                     f.write(f"\n{'='*50}\n")
                     f.write(f"[X-RAY DEBUG: translate_news_title] (시도 {current_attempt}/{max_retries}) {now_str}\n")
                     f.write(f"{'-'*50}\n")
-                    f.write(f"[PROMPT]\n{prompt}\n")
+                    f.write(f"[SYSTEM_INSTRUCTION]\n{system_instr}\n")
+                    f.write(f"{'-'*50}\n")
+                    f.write(f"[USER_CONTENT]\n{user_content}\n")
                     f.write(f"{'='*50}\n")
             except Exception as de:
                 logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
             # --- [X-RAY DEBUG END] ---
 
-            # [V18.2] 타 기능과 동일한 정석 호출 및 정산
-            response = client.models.generate_content(model=AI_MODEL, contents=prompt)
+            # [V27.0] 정석 호출: 기계적 번역 엔진 부스트 모드 가동
+            response = client.models.generate_content(
+                model=AI_MODEL, 
+                contents=user_content,
+                config=req_config
+            )
             text = response.text if response.text else ""
 
             # --- [X-RAY RESP DEBUG V25.0] --- 
@@ -394,7 +428,7 @@ def translate_news_title(vi_title: str) -> str:
                     task="News_Title_Translation", 
                     prompt_tokens=response.usage_metadata.prompt_token_count, 
                     candidate_tokens=response.usage_metadata.candidates_token_count,
-                    prompt_text=prompt,
+                    prompt_text=f"{system_instr}\n\n[USER_CONTENT]\n{user_content}",
                     response_text=text
                 )
             
@@ -435,13 +469,12 @@ def summarize_news_article(url: str) -> str:
         if not article_text:
             return "❌ 기사 본문 내용을 추출할 수 없습니다. (사이트 구조 변경 가능성)"
 
-        # [V17.8/V21.2 다이어트] 뉴스 요약은 news_summarizer 단독으로 수행 (페르소나 제외)
+        # [V21.2/V27.0] 뉴스 요약 지능형 분리: 지침(System)과 데이터(User)를 엄격히 구분합니다.
         now_info = _get_now_info()
         ability_prompt = load_ability('news_summarizer')
         
-        prompt = (
-            f"{ability_prompt}\n"
-            f"{now_info}\n\n"
+        system_instr = f"{ability_prompt}\n{now_info}"
+        user_content = (
             f"대상 기사 URL: {url}\n"
             f"기사 제목: {title_text}\n"
             f"기사 본문:\n{article_text[:5000]}" # 5천자 제한 (토건 보호)
@@ -456,8 +489,14 @@ def summarize_news_article(url: str) -> str:
                 # [V18.2] 타 기능과 동일한 정석 호출 및 정산 (X-Ray 포함)
                 client = _get_ai_client()
                 if not client: return "❌ AI 서버 연결 실패"
+                
+                # [V27.0] 지능형 설정을 적용하여 AI에게 정체성을 명확히 주입합니다.
+                req_config = types.GenerateContentConfig(
+                    system_instruction=system_instr,
+                    # response_mime_type="text/plain" # 뉴스 요약은 자유로운 텍스트 형식을 유지합니다.
+                )
 
-                # --- [X-RAY DEBUG START V24.1] ---
+                # --- [X-RAY DEBUG START V27.0] ---
                 try:
                     debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
                     with open(debug_log_path, "a", encoding="utf-8") as f:
@@ -466,14 +505,20 @@ def summarize_news_article(url: str) -> str:
                         f.write(f"\n{'='*50}\n")
                         f.write(f"[X-RAY DEBUG: summarize_news_article] {now_str} (시도 {current_attempt}/{max_retries})\n")
                         f.write(f"{'-'*50}\n")
-                        f.write(f"[SYSTEM_INSTRUCTION]\n{prompt}\n")
+                        f.write(f"[SYSTEM_INSTRUCTION]\n{system_instr}\n")
+                        f.write(f"{'-'*50}\n")
+                        f.write(f"[USER_CONTENT]\n{user_content}\n")
                         f.write(f"{'='*50}\n")
                 except Exception as de:
                     logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
                 # --- [X-RAY DEBUG END] ---
 
-                # [V18.2] 정석적인 토큰 정산과 응답 생성
-                response = client.models.generate_content(model=AI_MODEL, contents=prompt)
+                # [V27.0] 분리된 지침과 데이터를 바탕으로 응답 생성
+                response = client.models.generate_content(
+                    model=AI_MODEL, 
+                    contents=user_content,
+                    config=req_config
+                )
                 text = response.text if response.text else ""
 
                 # --- [X-RAY RESP DEBUG V24.1] --- 
@@ -488,7 +533,7 @@ def summarize_news_article(url: str) -> str:
                         task="News_Summary", 
                         prompt_tokens=response.usage_metadata.prompt_token_count, 
                         candidate_tokens=response.usage_metadata.candidates_token_count,
-                        prompt_text=prompt,
+                        prompt_text=f"{system_instr}\n\n[USER_CONTENT]\n{user_content}",
                         response_text=text
                     )
                 

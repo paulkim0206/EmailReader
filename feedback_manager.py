@@ -41,39 +41,39 @@ def save_preferences(pref_list):
         except Exception as e:
             logger.error(f"스킵 학습 노트를 디스크에 적는데 실패했습니다: {e}")
 
-def add_learning_preference(subject, summary, reason):
+def add_learning_preference(subject, summary, reason, user_opinion=None):
     """
-    [V12.19] 텔레그램에서 👎 싫어요(학습) 버튼을 눌렀을 때 호출됩니다.
-    제목, 요약, 그리고 AI가 분석한 '이유(Reason)'를 하나의 세트로 장부에 박제합니다.
+    [V27.0] 👎 싫어요(학습) 버튼을 눌렀을 때 호출됩니다.
+    제목, 요약, AI 분석 규칙(reason), 그리고 부장님의 원본 의견(user_opinion)을 세트로 저장합니다.
     """
     if not subject: subject = "제목 없음"
     if not summary: summary = "내용 없음"
     if not reason: reason = "이유 파악 불가"
         
-    # [V12.19] 지능형 세트 구조로 저장
+    # [V27.0] 부장님의 원본 의견까지 포함한 완전한 학습 데이터 구조
     new_pref = {
         "subject": subject,
         "summary": summary,
-        "reason": reason
+        "reason": reason,
+        "user_opinion": user_opinion or "의견 미기재"
     }
     
     current_list = load_preferences()
     
-    # 중복 체크 (제목과 이유가 같으면 중복으로 간주)
+    # 중복 체크
     for existing in current_list:
         if isinstance(existing, dict):
             if existing.get("subject") == subject and existing.get("reason") == reason:
                 return False, "이미 학습된 규칙입니다."
         elif isinstance(existing, str):
-            # 구형 데이터(문자열)와 제목이 같으면 일단 중복으로 간주
             if subject in existing:
                 return False, "이미 유사한 패턴이 학습되어 있습니다."
         
     current_list.append(new_pref)
     save_preferences(current_list)
     
-    logger.info(f"🧠 [지능형 학습 완료] 스킵 규칙이 등록되었습니다: {reason}")
-    return True, "패턴 머릿속에 입력 완료!"
+    logger.info(f"🧠 [지능형 학습 완료] 스킵 규칙 및 부장님 의견이 등록되었습니다: {reason}")
+    return True, "부장님의 고견을 받들어 패턴 학습을 완료했습니다! ✨"
 
 # --- V3.2 오답 노트(Corrections) 관리 기능 ---
 
