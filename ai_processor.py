@@ -139,6 +139,70 @@ def _log_ai_xray(task, system_instruction, contents, response_text=None):
     except Exception as de:
         logger.error(f"X-레이 통합 디버깅 기록 중 오류: {de}")
 
+def _execute_ai_call_with_retry(task_id, system_instr, user_content, config=None, max_attempts=4, wait_times=[5, 15, 30], is_json=False, safety_off=False):
+    """
+    [V29.0] 부장님의 특명을 받은 '통합 공통지원팀' 전담 엔진입니다.
+    심부름 출발부터 기록, 비용 정산, 재시도까지 모든 공통 업무를 완벽히 대행합니다.
+    """
+    attempt = 1
+    while attempt <= max_attempts:
+        try:
+            client = _get_ai_client()
+            if not client:
+                logger.error(f"[{task_id}] AI 클라이언트 확보 실패")
+                return None
+
+            # [V29.0] 보안/안전 설정 지능형 조절 (기계적 번역 등 대응)
+            if safety_off and config:
+                config.safety_settings = [
+                    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+                    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+                ]
+
+            # 1. 출발 기록 (X-Ray Request)
+            _log_ai_xray(task_id, system_instr, user_content)
+
+            # 2. AI 성문 두드리기 (심부름 수행)
+            response = client.models.generate_content(
+                model=AI_MODEL,
+                contents=user_content,
+                config=config or types.GenerateContentConfig(system_instruction=system_instr)
+            )
+
+            # 3. 도착 기록 (X-Ray Response)
+            resp_text = response.text if response.text else ""
+            _log_ai_xray(task_id, system_instr, user_content, response_text=resp_text)
+
+            # 4. 비용 정산 (Token Accounting)
+            if response.usage_metadata:
+                from token_manager import log_token
+                log_token(
+                    task=task_id,
+                    prompt_tokens=response.usage_metadata.prompt_token_count,
+                    candidate_tokens=response.usage_metadata.candidates_token_count,
+                    prompt_text=f"{system_instr}\n\n[USER_CONTENT]\n{user_content}",
+                    response_text=resp_text
+                )
+
+            # 5. 결과 반환 (JSON 요청 시 자동 세탁 및 파싱)
+            if is_json:
+                return json.loads(_clean_ai_json(resp_text))
+            return resp_text.strip()
+
+        except Exception as e:
+            logger.warning(f"[{task_id}] 시도({attempt}/{max_attempts}) 실패: {e}")
+            if attempt < max_attempts:
+                # [V29.0] 부장님이 지시하신 5/15/30초 대기 로직 적용
+                wait_time = wait_times[attempt-1] if attempt-1 < len(wait_times) else 30
+                logger.info(f"지능형 재시도를 위해 {wait_time}초간 휴식합니다...")
+                time.sleep(wait_time)
+            attempt += 1
+
+    logger.error(f"[{task_id}] 총 {max_attempts}회 시도했으나 결국 실패했습니다.")
+    return None
+
 # --- [기존 외부 호출 함수 리팩토링] ---
 
 def load_prompt(filename):
@@ -241,63 +305,32 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
     # 데이터 구성 (장부 주입 제거! 토큰 대폭 다이어트)
     final_text = f"[새 메일]\n발신: {mail_data.get('sender')}\n제목: {mail_data.get('subject')}\n본문: {email_body}"
 
-    # [V12.7] 부장님의 지식: 정석형 지능형 재시도 (Exponential Backoff 적용)
-    max_retries = 3
-    current_attempt = 1
-    
-    while current_attempt <= max_retries:
-        try:
-            client = _get_ai_client()
-            if not client: return _fallback_response()
-            
-            req_config = types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
+    # [V29.0] 공통지원팀 엔지에 심부름 의뢰 (최초 1회 + 재시도 3회 = 총 4회)
+    result = _execute_ai_call_with_retry(
+        task_id="Mail_Summary",
+        system_instr=dynamic_prompt,
+        user_content=final_text,
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+        is_json=True
+    )
 
-            # [V28.0] 통합 X-Ray 로그 기록 (요청)
-            _log_ai_xray("process_email_with_ai", dynamic_prompt, final_text)
+    if result:
+        # [V12.17] client_name이 누락되었을 경우를 대비한 기본값 설정
+        if 'client_name' not in result:
+            result['client_name'] = "알 수 없음"
 
-            # [V12.7] 단일 정예 엔진(AI_MODEL)으로 승부
-            response = client.models.generate_content(model=AI_MODEL, contents=final_text, config=req_config)
-            result = json.loads(_clean_ai_json(response.text))
+        # [V23.0] 세분화된 JSON 필드를 하나의 일관된 형식의 요약문으로 파이썬이 직접 조립합니다.
+        if result.get('status') in ['요약', '알림']:
+            summary_parts = []
+            if result.get('latest_msg'): summary_parts.append(f"* (방금 온 메일) {result['latest_msg'].strip()}")
+            if result.get('history_1'): summary_parts.append(f"* (과거 내역 1) {result['history_1'].strip()}")
+            if result.get('history_2'): summary_parts.append(f"* (과거 내역 2) {result['history_2'].strip()}")
+            result['summary'] = "\n\n".join(summary_parts)
+        else:
+            result['summary'] = ""
+        return result
 
-            # [V28.0] 통합 X-Ray 로그 기록 (응답 추가)
-            _log_ai_xray("process_email_with_ai", dynamic_prompt, final_text, response_text=response.text)
-            
-            # [V12.25] 실시간 토큰 사용량 기록 (입력/출력)
-            if response.usage_metadata:
-                log_token("Mail_Summary", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count, prompt_text=dynamic_prompt, response_text=response.text)
-            
-            # [V12.17] client_name이 누락되었을 경우를 대비한 기본값 설정
-            if 'client_name' not in result:
-                result['client_name'] = "알 수 없음"
-
-            # [V23.0] 세분화된 JSON 필드를 하나의 일관된 형식의 요약문으로 파이썬이 직접 조립합니다.
-            # AI에게 맡기지 않고 엔진에서 강제로 꼬리표를 붙여 일관성을 100% 확보합니다.
-            if result.get('status') in ['요약', '알림']:
-                summary_parts = []
-                if result.get('latest_msg'):
-                    summary_parts.append(f"* (방금 온 메일) {result['latest_msg'].strip()}")
-                if result.get('history_1'):
-                    summary_parts.append(f"* (과거 내역 1) {result['history_1'].strip()}")
-                if result.get('history_2'):
-                    summary_parts.append(f"* (과거 내역 2) {result['history_2'].strip()}")
-                
-                # [V22.0] 항목 간 정확히 한 줄의 빈 줄(Double Newline)로 조립
-                result['summary'] = "\n\n".join(summary_parts)
-            else:
-                result['summary'] = ""
-
-            return result
-
-        except Exception as e:
-            logger.warning(f"AI 분석 중 시도({current_attempt}/{max_retries}) 실패: {e}")
-            if current_attempt < max_retries:
-                # [V12.7] 정석 타이밍: 1회 실패 시 5초, 2회 실패 시 15초 대기
-                wait_time = 5 if current_attempt == 1 else 15
-                logger.info(f"지능형 재시도를 위해 {wait_time}초간 숨을 고릅니다...")
-                time.sleep(wait_time)
-            current_attempt += 1
-
-    # 모든 시도(3회) 실패 시 최종 항복(1단계)
+    # 모든 시도(4회) 실패 시 최종 항복(1단계)
     return _fallback_response()
 
 def extract_skip_rule_ai(subject: str, body: str, user_opinion: str = None) -> str:
@@ -322,36 +355,13 @@ def extract_skip_rule_ai(subject: str, body: str, user_opinion: str = None) -> s
     if user_opinion:
         user_content += f"\n\n[부장님의 직접 의견]: {user_opinion}"
     
-    # [V28.0] 통합 X-Ray 로그 기록
-    _log_ai_xray("extract_skip_rule_ai", system_instr, user_content)
-
-    try:
-        client = _get_ai_client()
-        if not client: return "분석 실패(API 오류)"
-        
-        req_config = types.GenerateContentConfig(system_instruction=system_instr)
-        response = client.models.generate_content(
-            model=AI_MODEL, 
-            contents=user_content,
-            config=req_config
-        )
-        
-        if response.usage_metadata:
-            log_token(
-                task="Skip_Rule_Analysis", 
-                prompt_tokens=response.usage_metadata.prompt_token_count, 
-                candidate_tokens=response.usage_metadata.candidates_token_count, 
-                prompt_text=f"{system_instr}\n\n[USER_CONTENT]\n{user_content}", 
-                response_text=response.text
-            )
-            # [V28.0] 통합 X-Ray 로그 기록 (응답)
-            _log_ai_xray("extract_skip_rule_ai", system_instr, user_content, response_text=response.text)
-            
-        rule = response.text.strip() if response.text else "유형 파악 불가"
-        return rule
-    except Exception as e:
-        logger.error(f"스킵 규칙 추출 중 오류: {e}")
-        return "분석 중 오류 발생"
+    # [V29.0] 공통지원팀 지원 요청
+    rule = _execute_ai_call_with_retry(
+        task_id="Skip_Rule_Analysis",
+        system_instr=system_instr,
+        user_content=user_content
+    )
+    return rule or "분석 중 오류 발생"
 
 def translate_news_title(vi_title: str) -> str:
     """베트남어 뉴스 제목을 한국어로 신속하게 번역합니다."""
@@ -365,61 +375,15 @@ def translate_news_title(vi_title: str) -> str:
     )
     user_content = f"대상 문장: {vi_title}"
     
-    max_retries = 3
-    current_attempt = 1
-    
-    while current_attempt <= max_retries:
-        try:
-            client = _get_ai_client()
-            if not client: return vi_title
-
-            # [V27.0] 부장님이 요청하신 '무조건 번역'을 위해 안전장치를 잠시 해제합니다.
-            req_config = types.GenerateContentConfig(
-                system_instruction=system_instr,
-                safety_settings=[
-                    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-                ]
-            )
-
-            # [V28.0] 통합 X-Ray 로그 기록
-            _log_ai_xray("translate_news_title", system_instr, user_content)
-
-            # [V27.0] 정석 호출: 기계적 번역 엔진 부스트 모드 가동
-            response = client.models.generate_content(
-                model=AI_MODEL, 
-                contents=user_content,
-                config=req_config
-            )
-            text = response.text if response.text else ""
-
-            # [V28.0] 통합 X-Ray 로그 기록 (응답)
-            _log_ai_xray("translate_news_title", system_instr, user_content, response_text=text)
-
-            if response.usage_metadata:
-                log_token(
-                    task="News_Title_Translation", 
-                    prompt_tokens=response.usage_metadata.prompt_token_count, 
-                    candidate_tokens=response.usage_metadata.candidates_token_count,
-                    prompt_text=f"{system_instr}\n\n[USER_CONTENT]\n{user_content}",
-                    response_text=text
-                )
-            
-            return text.strip() if text else vi_title
-            
-        except Exception as e:
-            logger.warning(f"뉴스 제목 번역 시도({current_attempt}/{max_retries}) 실패: {e}")
-            if current_attempt < max_retries:
-                # [V25.0] 서버 재접속 주기 연장: 2초, 5초 (서버 과부하 대응)
-                wait_time = 2 if current_attempt == 1 else 5
-                logger.info(f"뉴스 제목 번역을 위해 {wait_time}초 후 다시 시도합니다...")
-                import time
-                time.sleep(wait_time)
-            current_attempt += 1
-
-    return vi_title
+    # [V29.0] 공통지원팀 지원 요청 (번역 업무는 안전장치 해제 모드로 수행)
+    translated = _execute_ai_call_with_retry(
+        task_id="News_Title_Translation",
+        system_instr=system_instr,
+        user_content=user_content,
+        config=types.GenerateContentConfig(), # safety_off가 설정을 채워줌
+        safety_off=True
+    )
+    return (translated or vi_title).strip()
 
 def summarize_news_article(url: str) -> str:
     """베트남 뉴스 웹페이지 본문을 긁어와 AI로 요약 보고서를 생성합니다."""
@@ -455,59 +419,16 @@ def summarize_news_article(url: str) -> str:
             f"기사 본문:\n{article_text[:5000]}" # 5천자 제한 (토건 보호)
         )
         
-        # [V24.1] AI 서버 일시적 과부하(503) 대응을 위한 3회 재시도 로직
-        max_retries = 3
-        current_attempt = 1
-        
-        while current_attempt <= max_retries:
-            try:
-                # [V18.2] 타 기능과 동일한 정석 호출 및 정산 (X-Ray 포함)
-                client = _get_ai_client()
-                if not client: return "❌ AI 서버 연결 실패"
-                
-                # [V27.0] 지능형 설정을 적용하여 AI에게 정체성을 명확히 주입합니다.
-                req_config = types.GenerateContentConfig(
-                    system_instruction=system_instr,
-                    # response_mime_type="text/plain" # 뉴스 요약은 자유로운 텍스트 형식을 유지합니다.
-                )
-
-                # [V28.0] 통합 X-Ray 로그 기록 (요청)
-                _log_ai_xray("summarize_news_article", system_instr, user_content)
-
-                # [V27.0] 분리된 지침과 데이터를 바탕으로 응답 생성
-                response = client.models.generate_content(
-                    model=AI_MODEL, 
-                    contents=user_content,
-                    config=req_config
-                )
-                text = response.text if response.text else ""
-
-                # [V28.0] 통합 X-Ray 로그 기록 (응답 추가)
-                _log_ai_xray("summarize_news_article", system_instr, user_content, response_text=text)
-
-                if response.usage_metadata:
-                    log_token(
-                        task="News_Summary", 
-                        prompt_tokens=response.usage_metadata.prompt_token_count, 
-                        candidate_tokens=response.usage_metadata.candidates_token_count,
-                        prompt_text=f"{system_instr}\n\n[USER_CONTENT]\n{user_content}",
-                        response_text=text
-                    )
-                
-                return text.strip() if text else "❌ AI가 기사를 분석하지 못했습니다."
-
-            except Exception as e:
-                # 503 UNAVAILABLE 등 AI 서버 오류 시 재시도
-                if current_attempt < max_retries:
-                    # [V25.0] 서버 재접속 주기 연장: 2초, 5초 (내구도 강화)
-                    wait_time = 2 if current_attempt == 1 else 5
-                    logger.warning(f"뉴스 요약 시도({current_attempt}/{max_retries}) 실패: {e}. {wait_time}초 후 다시 시도합니다.")
-                    import time
-                    time.sleep(wait_time)
-                    current_attempt += 1
-                else:
-                    logger.error(f"뉴스 요약 작업 최종 실패 (3회 시도): {e}")
-                    return "❌ 현재 구글 AI 서버 부하로 인해 기사 분석이 지연되고 있습니다. 잠시 후 다시 시도해주세요."
+        # [V29.0] 공통지원팀 지원 요청
+        summary = _execute_ai_call_with_retry(
+            task_id="News_Summary",
+            system_instr=system_instr,
+            user_content=user_content
+        )
+        if summary:
+            return summary
+        else:
+            return "❌ 현재 구글 AI 서버 부하로 인해 기사 분석이 지연되고 있습니다. 잠시 후 다시 시도해주세요."
     except Exception as e:
         logger.error(f"뉴스 요약 스크래핑/전처리 오류: {e}")
         return "❌ 기사 본문을 분석하는 중에 오류가 발생했습니다."
@@ -540,38 +461,21 @@ def route_intent(user_message: str) -> str:
         "정답 카테고리:"
     )
 
-    try:
-        from token_manager import log_token
-        client = _get_ai_client()
-        if not client: return "GENERAL_CHAT"
+    # [V29.0] 공통지원팀 지원 요청
+    result = _execute_ai_call_with_retry(
+        task_id="Intent_Router",
+        system_instr="(없음)", # 지침이 프롬프트 본문에 포함됨
+        user_content=prompt,
+        config=types.GenerateContentConfig(temperature=0.0)
+    )
 
-        # [V28.0] 통합 X-Ray 로그 기록
-        _log_ai_xray("route_intent", "(없음)", prompt)
-
-        # 가장 빠르고 일관된 출력을 위해 temperature 최소화 설정
-        response = client.models.generate_content(
-            model=AI_MODEL, 
-            contents=prompt,
-             config=types.GenerateContentConfig(temperature=0.0)
-        )
-        
-        # [V28.0] 통합 X-Ray 로그 기록 (응답 추가)
-        _log_ai_xray("route_intent", "(없음)", prompt, response_text=response.text)
-        
-        # [V12.25] 토큰 기록 (라우터 전용)
-        if response.usage_metadata:
-            log_token("Intent_Router", response.usage_metadata.prompt_token_count, response.usage_metadata.candidates_token_count, prompt_text=prompt, response_text=response.text)
-
-        result = response.text.strip().upper() if response.text else "GENERAL_CHAT"
+    if result:
+        result = result.upper()
         logger.info(f"[Intent Router] AI 판단 원본 결과: {result}")
-        
         if "MAIL" in result: return "MAIL_WORK"
         elif "REPORT" in result: return "REPORT_WORK"
-        else: return "GENERAL_CHAT"
-        
-    except Exception as e:
-        logger.error(f"의도 분류 중 오류 (기본값 GENERAL_CHAT 설정): {e}")
-        return "GENERAL_CHAT"
+    
+    return "GENERAL_CHAT"
 
 def chat_with_secretary(user_message: str, replied_text: str = None, include_history: bool = True, intent: str = "GENERAL_CHAT") -> str:
     """
@@ -614,38 +518,17 @@ def chat_with_secretary(user_message: str, replied_text: str = None, include_his
         # [치명적 버그 수정] 어떤 경우에도 부장님의 '현재 메시지'는 배열 맨 마지막에 추가되어야 합니다.
         contents.append(types.Content(role="user", parts=[types.Part.from_text(text=user_message)]))
 
-        client = _get_ai_client()
-        if not client: return "🚨 제 두뇌(API 키)가 연결되어 있지 않습니다."
-
-        # [V28.0] 통합 X-Ray 로그 기록
-        _log_ai_xray("chat_with_secretary", chat_prompt, str(contents))
-
-        # [혁신] 단일 메시지가 아닌 '누적된 대화 흐름(contents)' 전체를 바탕으로 응답을 생성합니다.
-        response = client.models.generate_content(
-            model=AI_MODEL, 
-            contents=contents,
-            config=types.GenerateContentConfig(system_instruction=chat_prompt)
+        # [V29.0] 공통지원팀 지원 요청 (최고 성능 대화 엔진 연결)
+        ai_reply = _execute_ai_call_with_retry(
+            task_id="Secretary_Chat",
+            system_instr=chat_prompt,
+            user_content=contents
         )
         
-        # [V28.0] 통합 X-Ray 로그 기록 (응답 추가)
-        _log_ai_xray("chat_with_secretary", chat_prompt, str(contents), response_text=response.text)
-
-        # [V18.4] 토큰 로깅 정예화: 디버그 리포트 생성을 위해 프롬프트/답변 텍스트를 함께 넘깁니다.
-        if response.usage_metadata:
-            log_token(
-                task="Secretary_Chat", 
-                prompt_tokens=response.usage_metadata.prompt_token_count, 
-                candidate_tokens=response.usage_metadata.candidates_token_count,
-                prompt_text=chat_prompt, 
-                response_text=response.text
-            )
-            
-        # [V12.16] AI 응답이 비어있거나(None) 차단되었을 때를 대비한 최종 방어선
-        return response.text or "🚨 앗, 부장님! 방금 머릿속에 안개가 낀 것처럼 답변이 떠오르지 않습니다. 다시 한번 말씀해 주시겠어요?"
-        
-    except Exception as e:
-        logger.error(f"지능형 대화 엔진 오류: {e}")
-        return "🚨 앗, 부장님! 방금 머릿속에 기억들이 꼬여서 잠시 멍해졌습니다. 다시 말씀해 주시겠어요?"
+        if ai_reply:
+            return ai_reply
+        else:
+            return "🚨 앗, 부장님! 방금 머릿속에 안개가 낀 것처럼 답변이 떠오르지 않습니다. 다시 한번 말씀해 주시겠어요?"
 
 def generate_daily_report_ai(raw_summaries: list) -> dict:
     """[V11.8] 일일 보고서 전용 지침(daily_strategy)을 사용하여 고객사별 요약을 생성합니다."""
@@ -656,33 +539,14 @@ def generate_daily_report_ai(raw_summaries: list) -> dict:
     # [V12.17] 장부에 저장된 진짜 고객사명(client)을 제공하여 AI의 오판을 방지합니다.
     data_text = "\n".join([f"고객사: {i['client']} | 제목: {i['subject']} | 요약: {i['summary']}" for i in raw_summaries])
 
-    try:
-        client = _get_ai_client()
-        if not client: return {"topics": [{"category": "오류", "items": ["API 연결 실패"]}]}
-
-        # [V28.0] 통합 X-Ray 로그 기록 (요청)
-        _log_ai_xray("generate_daily_report_ai", dynamic_prompt, data_text)
-
-        response = client.models.generate_content(
-            model=AI_MODEL, contents=data_text,
-            config=types.GenerateContentConfig(system_instruction=dynamic_prompt, response_mime_type="application/json")
-        )
-
-        # [V28.0] 통합 X-Ray 로그 기록 (응답 추가)
-        _log_ai_xray("generate_daily_report_ai", dynamic_prompt, data_text, response_text=response.text)
-        
-        # [V12.25] 토큰 기록 (V18.4 오타 수정: prompt -> dynamic_prompt)
-        if response.usage_metadata:
-            log_token(
-                task="Daily_Report", 
-                prompt_tokens=response.usage_metadata.prompt_token_count, 
-                candidate_tokens=response.usage_metadata.candidates_token_count, 
-                prompt_text=f"{dynamic_prompt}\n\n[DATA]\n{data_text}", 
-                response_text=response.text
-            )
-            
-        return json.loads(_clean_ai_json(response.text))
-    except Exception:
-        return {"topics": [{"category": "오류", "items": ["보고서 생성 실패"]}]}
+    # [V29.0] 공통지원팀 지원 요청
+    result = _execute_ai_call_with_retry(
+        task_id="Daily_Report",
+        system_instr=dynamic_prompt,
+        user_content=data_text,
+        config=types.GenerateContentConfig(response_mime_type="application/json"),
+        is_json=True
+    )
+    return result or {"topics": [{"category": "오류", "items": ["보고서 생성 실패"]}]}
 
 
