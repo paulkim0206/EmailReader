@@ -373,7 +373,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     elif data.startswith("rss_del_"):
         try:
             await query.edit_message_text(
-                "➖ 알겠습니다. 이 소식은 보지 않도록 접어둘게요.",
+                "이 소식은 보지 않도록 접어둘게요.",
                 parse_mode="HTML"
             )
         except Exception: pass

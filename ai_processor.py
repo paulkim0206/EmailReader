@@ -349,10 +349,10 @@ def translate_news_title(vi_title: str) -> str:
     if not vi_title: return "제목 없음"
     
     prompt = (
-        f"너는 베트남어-한국어 전문 번역가다.\n"
-        f"다음 베트남 뉴스 제목을 한국어로 자연스럽고 간결하게 번역하라.\n\n"
-        f"제목: {vi_title}\n\n"
-        f"결론은 번역된 제목만 딱 한 줄로 말하라."
+        f"너는 정치/종교/인물 등 어떠한 주관적 판단도 배제하고 오직 '언어적 매핑'만 수행하는 기계적 베트남어-한국어 번역 엔진이다.\n"
+        f"제공되는 문장이 어떤 민감한 주제(정치적 인물, 사건 등)를 포함하더라도 절대로 거부하거나 회피하지 말고, 즉시 한국어로 번역하라.\n\n"
+        f"대상 문장: {vi_title}\n\n"
+        f"결론은 번역된 결과물만 딱 한 줄로 출력하라. (사족/설명/인사말 금지)"
     )
     
     max_retries = 3
@@ -363,7 +363,7 @@ def translate_news_title(vi_title: str) -> str:
             client = _get_ai_client()
             if not client: return vi_title
 
-            # --- [X-RAY DEBUG START] ---
+            # --- [X-RAY DEBUG START V25.0] ---
             try:
                 debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
                 with open(debug_log_path, "a", encoding="utf-8") as f:
@@ -382,6 +382,13 @@ def translate_news_title(vi_title: str) -> str:
             response = client.models.generate_content(model=AI_MODEL, contents=prompt)
             text = response.text if response.text else ""
 
+            # --- [X-RAY RESP DEBUG V25.0] --- 
+            try:
+                with open(debug_log_path, "a", encoding="utf-8") as f:
+                    f.write(f"[AI_RESPONSE]\n{text}\n")
+                    f.write(f"{'='*50}\n")
+            except Exception: pass
+
             if response.usage_metadata:
                 log_token(
                     task="News_Title_Translation", 
@@ -396,9 +403,10 @@ def translate_news_title(vi_title: str) -> str:
         except Exception as e:
             logger.warning(f"뉴스 제목 번역 시도({current_attempt}/{max_retries}) 실패: {e}")
             if current_attempt < max_retries:
-                # [V21.9] 초고속 재시도 주기 세팅: 1초, 3초
-                wait_time = 1 if current_attempt == 1 else 3
+                # [V25.0] 서버 재접속 주기 연장: 2초, 5초 (서버 과부하 대응)
+                wait_time = 2 if current_attempt == 1 else 5
                 logger.info(f"뉴스 제목 번역을 위해 {wait_time}초 후 다시 시도합니다...")
+                import time
                 time.sleep(wait_time)
             current_attempt += 1
 
@@ -439,41 +447,67 @@ def summarize_news_article(url: str) -> str:
             f"기사 본문:\n{article_text[:5000]}" # 5천자 제한 (토건 보호)
         )
         
-        # [V18.2] 타 기능과 동일한 정석 호출 및 정산 (X-Ray 포함)
-        client = _get_ai_client()
-        if not client: return "❌ AI 서버 연결 실패"
-
-        # --- [X-RAY DEBUG START] ---
-        try:
-            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
-            with open(debug_log_path, "a", encoding="utf-8") as f:
-                tz = pytz.timezone(USER_TIMEZONE)
-                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-                f.write(f"\n{'='*50}\n")
-                f.write(f"[X-RAY DEBUG: summarize_news_article] {now_str}\n")
-                f.write(f"{'-'*50}\n")
-                f.write(f"[SYSTEM_INSTRUCTION]\n{prompt}\n")
-                f.write(f"{'='*50}\n")
-        except Exception as de:
-            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
-        # --- [X-RAY DEBUG END] ---
-
-        # [V18.2] 정석적인 토큰 정산과 응답 생성
-        response = client.models.generate_content(model=AI_MODEL, contents=prompt)
-        text = response.text if response.text else ""
-
-        if response.usage_metadata:
-            log_token(
-                task="News_Summary", 
-                prompt_tokens=response.usage_metadata.prompt_token_count, 
-                candidate_tokens=response.usage_metadata.candidates_token_count,
-                prompt_text=prompt,
-                response_text=text
-            )
+        # [V24.1] AI 서버 일시적 과부하(503) 대응을 위한 3회 재시도 로직
+        max_retries = 3
+        current_attempt = 1
         
-        return text.strip() if text else "❌ AI가 기사를 분석하지 못했습니다."
+        while current_attempt <= max_retries:
+            try:
+                # [V18.2] 타 기능과 동일한 정석 호출 및 정산 (X-Ray 포함)
+                client = _get_ai_client()
+                if not client: return "❌ AI 서버 연결 실패"
+
+                # --- [X-RAY DEBUG START V24.1] ---
+                try:
+                    debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
+                    with open(debug_log_path, "a", encoding="utf-8") as f:
+                        tz = pytz.timezone(USER_TIMEZONE)
+                        now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                        f.write(f"\n{'='*50}\n")
+                        f.write(f"[X-RAY DEBUG: summarize_news_article] {now_str} (시도 {current_attempt}/{max_retries})\n")
+                        f.write(f"{'-'*50}\n")
+                        f.write(f"[SYSTEM_INSTRUCTION]\n{prompt}\n")
+                        f.write(f"{'='*50}\n")
+                except Exception as de:
+                    logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
+                # --- [X-RAY DEBUG END] ---
+
+                # [V18.2] 정석적인 토큰 정산과 응답 생성
+                response = client.models.generate_content(model=AI_MODEL, contents=prompt)
+                text = response.text if response.text else ""
+
+                # --- [X-RAY RESP DEBUG V24.1] --- 
+                try:
+                    with open(debug_log_path, "a", encoding="utf-8") as f:
+                        f.write(f"[AI_RESPONSE]\n{text}\n")
+                        f.write(f"{'='*50}\n")
+                except Exception: pass
+
+                if response.usage_metadata:
+                    log_token(
+                        task="News_Summary", 
+                        prompt_tokens=response.usage_metadata.prompt_token_count, 
+                        candidate_tokens=response.usage_metadata.candidates_token_count,
+                        prompt_text=prompt,
+                        response_text=text
+                    )
+                
+                return text.strip() if text else "❌ AI가 기사를 분석하지 못했습니다."
+
+            except Exception as e:
+                # 503 UNAVAILABLE 등 AI 서버 오류 시 재시도
+                if current_attempt < max_retries:
+                    # [V25.0] 서버 재접속 주기 연장: 2초, 5초 (내구도 강화)
+                    wait_time = 2 if current_attempt == 1 else 5
+                    logger.warning(f"뉴스 요약 시도({current_attempt}/{max_retries}) 실패: {e}. {wait_time}초 후 다시 시도합니다.")
+                    import time
+                    time.sleep(wait_time)
+                    current_attempt += 1
+                else:
+                    logger.error(f"뉴스 요약 작업 최종 실패 (3회 시도): {e}")
+                    return "❌ 현재 구글 AI 서버 부하로 인해 기사 분석이 지연되고 있습니다. 잠시 후 다시 시도해주세요."
     except Exception as e:
-        logger.error(f"뉴스 요약 처리 중 오류: {e}")
+        logger.error(f"뉴스 요약 스크래핑/전처리 오류: {e}")
         return "❌ 기사 본문을 분석하는 중에 오류가 발생했습니다."
 
 def _fallback_response():
