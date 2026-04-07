@@ -225,10 +225,10 @@ async def send_rss_alert(application, item):
         f"<i>({item.get('pub_date', '')})</i>"
     )
     
-    # [V18.6] [📰 요약] 및 [🗑️ 버리기] 버튼 동시 배치 (채팅창 다이어트용)
+    # [V19.3] [📰 요약] 및 [❌ 관심없음] 버튼 동시 배치 (부장님 스타일 정돈)
     keyboard = [[
         InlineKeyboardButton("📰 한글 요약 보기", callback_data=f"rss_sum_{url_hash}"),
-        InlineKeyboardButton("🗑️ 버리기", callback_data=f"rss_del_{url_hash}")
+        InlineKeyboardButton("❌ 관심없음", callback_data=f"rss_del_{url_hash}")
     ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -324,7 +324,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer(text="⚠️ 해당 기능(메일 원본 저장)은 부장님 지시로 폐지되었습니다.", show_alert=True)
         return
 
-    # [V19.1] 베트남 뉴스 기사 요약 처리 (제로-토큰 제목 재활용 버전)
+    # [V19.3] 베트남 뉴스 기사 요약 처리 (스마트 답글 모드)
     elif data.startswith("rss_sum_"):
         url_hash = data.replace("rss_sum_", "")
         url = RSS_URL_MAP.get(url_hash)
@@ -333,51 +333,24 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             await query.answer("⚠️ 세션이 만료되어 기사 링크를 찾을 수 없습니다.", show_alert=True)
             return
             
-        # 1. [V19.2] 원본 알림에서 제목 정보만 정밀하게 추출 (가독성 튜닝)
-        original_msg = query.message.text
-        extracted_info = []
-        for line in original_msg.split('\n'):
-            line = line.strip()
-            # 헤더([베트남 뉴스 속보]) 및 불필요한 공백은 건너뜁니다.
-            if not line or "뉴스 속보" in line: continue
-            
-            if line.startswith('🇰🇷'): 
-                extracted_info.append(f"<b>{line}</b>")
-            elif line.startswith('🇻🇳'): 
-                # [V19.2] 베트남어 제목 뒤에 엔터(\n)를 한 번 더 넣어 시각적 여유를 둡니다.
-                extracted_info.append(f"<i>{line}</i>\n")
-            elif line.startswith('('): 
-                # 발행일자 처리
-                extracted_info.append(f"<i>{line}</i>")
-        
-        title_section = "\n".join(extracted_info) if extracted_info else "뉴스 정보 추출 실패"
-
-        # 2. 상단 팝업(Toast) 알림 송신 (대기 안내)
-        await query.answer("⏳ 기사를 정독하고 있습니다... (약 10~20초 소요)", show_alert=False)
-        
-        # 3. 기존 말풍선 즉시 슬림화 (채팅창 다이어트)
-        try:
-            await query.edit_message_text(
-                "🔄 <b>기사를 요약 중입니다...</b>",
-                parse_mode="HTML"
-            )
-        except Exception: pass
+        # 1. 상단 팝업(Toast) 알림 송신 (대기 안내)
+        await query.answer("⏳ 요약본을 준비하고 있습니다... (약 10~20초 소요)", show_alert=False)
         
         try:
             from ai_processor import summarize_news_article
-            # AI 요약 실행 (업데이트된 '제목 제외' 프롬프트 사용 명령)
+            # AI 요약 실행 (업데이트된 '제목 제외' 프롬프트 사용)
             summary = await asyncio.to_thread(summarize_news_article, url)
             
-            # 4. [V19.1] 가로챈 제목 + AI 요약본 합체하여 새로운 메시지로 발송 (토큰 대폭 절감)
+            # 2. [V19.3] 원본 메시지에 대한 '답글(Reply)' 형태로 발송 (가장 스마트한 연결)
+            # 기존 메시지를 수정하지 않아 제목이 보존되며, 답글로 맥락이 이어집니다.
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
                 text=(
                     f"📝 <b>[베트남 뉴스 요약 보고]</b>\n\n"
-                    f"{title_section}\n"  # 파이썬이 추출한 기존 제목 재활용
-                    f"━━━━━━━━━━━━━━━\n\n"
                     f"{summary}\n\n"
                     f"🔗 <a href='{url}'>[기사 원문 보기]</a>"
                 ),
+                reply_to_message_id=query.message.message_id, # 핵심! 답글 기능 활성화
                 parse_mode="HTML",
                 disable_web_page_preview=True
             )
@@ -385,21 +358,20 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
             logger.error(f"뉴스 요약 처리 중 오류: {e}")
             await context.bot.send_message(
                 chat_id=query.message.chat_id,
-                text=f"❌ <b>뉴스 요약 실패:</b> 기사 분석 중 오류가 발생했습니다.\n{url}",
+                text=f"❌ <b>뉴스 요약 실패:</b> 분석 중 오류가 발생했습니다.",
+                reply_to_message_id=query.message.message_id,
                 parse_mode="HTML"
             )
         return
             
-    # [V18.6] 뉴스 알림 즉시 취소(버리기) 처리
+    # [V19.3] '관심없음' 처리: 기존 말풍선을 정중한 안내 메시지로 대체
     elif data.startswith("rss_del_"):
-        await query.answer("🗑️ 뉴스 알림을 취소했습니다.")
         try:
             await query.edit_message_text(
-                text="🗑️ <b>[취소된 뉴스]</b>\n이 기사 알림은 요청에 의해 취소되었습니다.",
+                "🚫 <b>해당 소식은 관심 항목에서 제외되었습니다.</b>",
                 parse_mode="HTML"
             )
-        except Exception:
-            pass
+        except Exception: pass
         return
 
     # [V17.5] 고비용 통합 장부 다운로드 처리
