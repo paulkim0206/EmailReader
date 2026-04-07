@@ -373,7 +373,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     elif data.startswith("rss_del_"):
         try:
             await query.edit_message_text(
-                "🚫 <b>해당 소식은 관심 항목에서 제외되었습니다.</b>",
+                "➖ 알겠습니다. 이 소식은 보지 않도록 접어둘게요.",
                 parse_mode="HTML"
             )
         except Exception: pass
@@ -814,7 +814,7 @@ async def handle_memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not memo_content:
         from telegram import ForceReply
         await update.message.reply_text(
-            "📝 새로 추가할 메모 내용을 하단에 적어주세요. (이 메시지에 대한 답장 형태)",
+            "📝 새로 추가할 노트 내용을 하단에 적어주세요. (이 메시지에 대한 답장 형태)",
             reply_markup=ForceReply(selective=True)
         )
         return
@@ -1047,8 +1047,8 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if update.message.reply_to_message:
         replied_msg = update.message.reply_to_message.text
         
-        # 1. 노트 추가 처리
-        if "새로 추가할 노트 내용" in replied_msg:
+        # 1. [V21.7] 노트 추가 처리 (유연한 키워드 판독: '새로 추가할' + '내용' 조합)
+        if "새로 추가할" in replied_msg and "내용" in replied_msg:
             from memo_manager import save_memo
             memo_content = user_text.strip()
             if save_memo(memo_content):

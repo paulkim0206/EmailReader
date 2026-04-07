@@ -254,7 +254,23 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
             # [V12.17] client_name이 누락되었을 경우를 대비한 기본값 설정
             if 'client_name' not in result:
                 result['client_name'] = "알 수 없음"
+
+            # [V23.0] 세분화된 JSON 필드를 하나의 일관된 형식의 요약문으로 파이썬이 직접 조립합니다.
+            # AI에게 맡기지 않고 엔진에서 강제로 꼬리표를 붙여 일관성을 100% 확보합니다.
+            if result.get('status') in ['요약', '알림']:
+                summary_parts = []
+                if result.get('latest_msg'):
+                    summary_parts.append(f"* (방금 온 메일) {result['latest_msg'].strip()}")
+                if result.get('history_1'):
+                    summary_parts.append(f"* (과거 내역 1) {result['history_1'].strip()}")
+                if result.get('history_2'):
+                    summary_parts.append(f"* (과거 내역 2) {result['history_2'].strip()}")
                 
+                # [V22.0] 항목 간 정확히 한 줄의 빈 줄(Double Newline)로 조립
+                result['summary'] = "\n\n".join(summary_parts)
+            else:
+                result['summary'] = ""
+
             return result
 
         except Exception as e:
@@ -330,42 +346,54 @@ def translate_news_title(vi_title: str) -> str:
         f"결론은 번역된 제목만 딱 한 줄로 말하라."
     )
     
-    try:
-        client = _get_ai_client()
-        if not client: return vi_title
-
-        # --- [X-RAY DEBUG START] ---
+    max_retries = 3
+    current_attempt = 1
+    
+    while current_attempt <= max_retries:
         try:
-            debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
-            with open(debug_log_path, "a", encoding="utf-8") as f:
-                tz = pytz.timezone(USER_TIMEZONE)
-                now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
-                f.write(f"\n{'='*50}\n")
-                f.write(f"[X-RAY DEBUG: translate_news_title] {now_str}\n")
-                f.write(f"{'-'*50}\n")
-                f.write(f"[PROMPT]\n{prompt}\n")
-                f.write(f"{'='*50}\n")
-        except Exception as de:
-            logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
-        # --- [X-RAY DEBUG END] ---
+            client = _get_ai_client()
+            if not client: return vi_title
 
-        # [V18.2] 타 기능과 동일한 정석 호출 및 정산
-        response = client.models.generate_content(model=AI_MODEL, contents=prompt)
-        text = response.text if response.text else ""
+            # --- [X-RAY DEBUG START] ---
+            try:
+                debug_log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ai_payload_debug.txt")
+                with open(debug_log_path, "a", encoding="utf-8") as f:
+                    tz = pytz.timezone(USER_TIMEZONE)
+                    now_str = datetime.datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")
+                    f.write(f"\n{'='*50}\n")
+                    f.write(f"[X-RAY DEBUG: translate_news_title] (시도 {current_attempt}/{max_retries}) {now_str}\n")
+                    f.write(f"{'-'*50}\n")
+                    f.write(f"[PROMPT]\n{prompt}\n")
+                    f.write(f"{'='*50}\n")
+            except Exception as de:
+                logger.error(f"X-레이 디버깅 기록 중 오류: {de}")
+            # --- [X-RAY DEBUG END] ---
 
-        if response.usage_metadata:
-            log_token(
-                task="News_Title_Translation", 
-                prompt_tokens=response.usage_metadata.prompt_token_count, 
-                candidate_tokens=response.usage_metadata.candidates_token_count,
-                prompt_text=prompt,
-                response_text=text
-            )
-        
-        return text.strip() if text else vi_title
-    except Exception as e:
-        logger.warning(f"뉴스 제목 번역 실패: {e}")
-        return vi_title
+            # [V18.2] 타 기능과 동일한 정석 호출 및 정산
+            response = client.models.generate_content(model=AI_MODEL, contents=prompt)
+            text = response.text if response.text else ""
+
+            if response.usage_metadata:
+                log_token(
+                    task="News_Title_Translation", 
+                    prompt_tokens=response.usage_metadata.prompt_token_count, 
+                    candidate_tokens=response.usage_metadata.candidates_token_count,
+                    prompt_text=prompt,
+                    response_text=text
+                )
+            
+            return text.strip() if text else vi_title
+            
+        except Exception as e:
+            logger.warning(f"뉴스 제목 번역 시도({current_attempt}/{max_retries}) 실패: {e}")
+            if current_attempt < max_retries:
+                # [V21.9] 초고속 재시도 주기 세팅: 1초, 3초
+                wait_time = 1 if current_attempt == 1 else 3
+                logger.info(f"뉴스 제목 번역을 위해 {wait_time}초 후 다시 시도합니다...")
+                time.sleep(wait_time)
+            current_attempt += 1
+
+    return vi_title
 
 def summarize_news_article(url: str) -> str:
     """베트남 뉴스 웹페이지 본문을 긁어와 AI로 요약 보고서를 생성합니다."""
