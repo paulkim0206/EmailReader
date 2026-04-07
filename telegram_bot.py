@@ -680,9 +680,8 @@ async def handle_location_update(update: Update, context: ContextTypes.DEFAULT_T
 async def command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if str(update.message.chat_id) != ALLOWED_CHAT_ID: return
     
-    # [V12.16] 부장님을 위한 '하단 고정형 스마트 메뉴' 설계 및 장착
-    keyboard = [['❓ 도움말', '📝 노트보기', '🔄 업데이트']]
-    # resize_keyboard=True 로 크기 최적화, is_persistent=True로 항상 고정 유지
+    # [V19.7] 텔레그램 / 메뉴로 도움말 대체 → ❓ 도움말 버튼 제거
+    keyboard = [['📝 노트보기', '🔄 업데이트']]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
     
     await update.message.reply_text(
@@ -1074,13 +1073,9 @@ async def handle_normal_chat(update: Update, context: ContextTypes.DEFAULT_TYPE)
                     await update.message.reply_text(f"🚨 {memo_id}번 노트 수정에 실패했습니다.")
             return
 
-    # [V12.0] 하단 고정 메뉴 감지
-    if user_text == "❓ 도움말":
-        # 도움말은 기계적인 나열이므로 0.1초 만에 파이썬이 즉각 응답합니다.
-        await handle_help_command(update, context)
-        return
-    
-    elif user_text == "🔄 업데이트":
+
+    # [V19.7] '❓ 도움말' 버튼은 제거됨 (텔레그램 / 메뉴로 대체)
+    if user_text == "🔄 업데이트":
         # 업데이트 버튼 클릭 시 즉시 시스템 패치 핸들러를 호출합니다.
         await handle_update_command(update, context)
         return
@@ -1218,16 +1213,18 @@ async def set_bot_commands(application: Application):
     (부장님의 지침에 따라 오직 영문으로만 구성합니다.)
     """
     commands = [
-        BotCommand("status", "Check System Status"),
-        BotCommand("token", "Real-time AI Token Usage Today"),
-        BotCommand("help", "Get Help & Main Menu"),
-        BotCommand("note", "Add a New Quick Note"),
-        BotCommand("notelist", "View All Saved Notes"),
-        BotCommand("update", "Check and Apply System Patch"),
-        BotCommand("restart", "Reboot Peani System"),
-        BotCommand("time", "Current Time & Timezone"),
-        BotCommand("memory", "Manage Chat History Memory"),
-        BotCommand("shutdown", "Emergency System Shutdown (Manual Restart Required)")
+        BotCommand("status", "봇 서버 상태 확인 및 하단 메뉴 활성화"),
+        BotCommand("token", "오늘 AI 토큰 실시간 사용량 조회 (00:00 ~ 현재)"),
+        BotCommand("help", "도움말 및 하단 고정 메뉴 호출"),
+        BotCommand("note", "새로운 메모를 수첩에 즉시 기록"),
+        BotCommand("notelist", "저장된 노트 목록 인라인 메뉴 호출"),
+        BotCommand("notedel", "메모 번호(ID)로 즉시 삭제"),
+        BotCommand("notebackup", "수첩 백업 장부 파일 다운로드"),
+        BotCommand("update", "최신 코드 패치 적용 및 자동 재시작"),
+        BotCommand("restart", "서버 즉시 재부팅 (코드 업데이트 없음)"),
+        BotCommand("memory", "대화 기억 현황 조회 및 초기화"),
+        BotCommand("time", "현재 시각 및 타임존 확인"),
+        BotCommand("shutdown", "서버 즉시 강제 종료 (비상용)")
     ]
     try:
         await application.bot.set_my_commands(commands)
