@@ -151,7 +151,7 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
             "is_ai_error": False,
             "is_thread": False,
             "client_name": sender,
-            "summary": f"<b>[첨부파일 메일]</b> 본문 없이 첨부파일만 수신됨."
+            "summary": f"[첨부파일 메일] 본문 없이 첨부파일만 수신됨."
         }
 
     # [V12.11] 최정예 세이프가드: 기계어 패턴(500자)만 철저히 차단 (부장님의 정석 지참)
@@ -246,6 +246,15 @@ def process_email_with_ai(mail_data, force_summarize=False, retry_count=1):
             # [V12.7] 단일 정예 엔진(AI_MODEL)으로 승부
             response = client.models.generate_content(model=AI_MODEL, contents=final_text, config=req_config)
             result = json.loads(_clean_ai_json(response.text))
+
+            # --- [X-RAY RESP DEBUG START V24.0] --- 
+            try:
+                with open(AI_DEBUG_LOG, "a", encoding="utf-8") as f:
+                    f.write(f"[AI_RESPONSE]\n{response.text}\n")
+                    f.write(f"{'='*50}\n")
+            except Exception as de:
+                logger.error(f"X-레이 응답 기록 중 오류: {de}")
+            # --- [X-RAY RESP DEBUG END] ---
             
             # [V12.25] 실시간 토큰 사용량 기록 (입력/출력)
             if response.usage_metadata:

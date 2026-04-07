@@ -166,12 +166,13 @@ def get_text_from_email(msg):
     def is_just_placeholder(txt):
         if not txt: return True
         txt = txt.strip().lower()
-        # 안내문의 전형적인 키워드들 (한글, 영어, 중국어 포함)
+        # [V24.0] 전 세계 낡은 메일 서버들의 '유령 안내문' 차단 리스트 보강
         placeholders = [
             "html 형식", "html viewer", "multi-part message", "mime format",
-            "html-compatible", "browser", "화면이 정상적으로 보이지", "본 메일은 html"
+            "html-compatible", "browser", "화면이 정상적으로 보이지", "본 메일은 html",
+            "this is a html mail", "switch to html", "check the mail", "please switch to html"
         ]
-        # 글자 수가 너무 짧으면서(100자 이하) 위 키워드 중 하나라도 포함되어 있다면 유령 문구로 간주!
+        # 글자 수가 짧거나(150자 이하) 위 키워드 중 하나라도 명확히 포함되어 있다면 유령 문구로 간주!
         if len(txt) < 150:
             for p in placeholders:
                 if p in txt: return True
