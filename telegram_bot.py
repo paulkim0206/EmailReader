@@ -225,8 +225,11 @@ async def send_rss_alert(application, item):
         f"<i>({item.get('pub_date', '')})</i>"
     )
     
-    # [📰 한글 요약] 버튼 부착
-    keyboard = [[InlineKeyboardButton("📰 한글 요약 보기", callback_data=f"rss_sum_{url_hash}")]]
+    # [V18.6] [📰 요약] 및 [🗑️ 버리기] 버튼 동시 배치 (채팅창 다이어트용)
+    keyboard = [[
+        InlineKeyboardButton("📰 한글 요약 보기", callback_data=f"rss_sum_{url_hash}"),
+        InlineKeyboardButton("🗑️ 버리기", callback_data=f"rss_del_{url_hash}")
+    ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     try:
@@ -365,6 +368,18 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
                 chat_id=query.message.chat_id,
                 text=f"❌ <b>뉴스 요약 실패:</b> 원문을 가져와 분석하는 중 오류가 발생했습니다.\n{url}"
             )
+        return
+            
+    # [V18.6] 뉴스 알림 즉시 취소(버리기) 처리
+    elif data.startswith("rss_del_"):
+        await query.answer("🗑️ 뉴스 알림을 취소했습니다.")
+        try:
+            await query.edit_message_text(
+                text="🗑️ <b>[취소된 뉴스]</b>\n이 기사 알림은 요청에 의해 취소되었습니다.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass
         return
 
     # [V17.5] 고비용 통합 장부 다운로드 처리
