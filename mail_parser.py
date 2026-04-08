@@ -265,7 +265,10 @@ def decode_email_header(raw_header):
                 result += decoded_string.decode("utf-8", errors="replace")
         else:
             result += decoded_string
-    return result
+    
+    # [V33.0 QC] 지능형 헤더 세탁: 제목이나 발신자명에 포함된 불필요한 줄바꿈과 제어 문자를 제거하여 장부 파손을 방지합니다.
+    clean_result = re.sub(r'\s+', ' ', result).strip()
+    return clean_result
 
 def format_to_vietnam_time(raw_date_str):
     """

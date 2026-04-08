@@ -4,6 +4,7 @@ import datetime
 import pytz
 import threading
 from config import TOKEN_USAGE_FILE, USER_TIMEZONE, logger
+from utils import safe_json_dump
 
 # 동시에 여러 공정이 기록을 시도할 때 파일이 깨지지 않게 방어하는 잠금 장치입니다.
 _TOKEN_LOCK = threading.Lock()
@@ -39,8 +40,10 @@ def log_token(task, prompt_tokens, candidate_tokens, prompt_text=None, response_
                     data = []
             
             data.append(entry)
-            with open(TOKEN_USAGE_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            try:
+                safe_json_dump(data, TOKEN_USAGE_FILE, indent=2)
+            except Exception:
+                pass
             
         logger.info(f"🪙 토큰 기록 완료: {task} (Total: {total_tokens})")
 

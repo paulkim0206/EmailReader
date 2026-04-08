@@ -3,6 +3,7 @@ import json
 import datetime
 import pytz
 from config import REPORTS_DIR, logger, USER_TIMEZONE
+from utils import safe_json_dump
 
 def get_weekly_report_path(date_obj):
     """
@@ -26,8 +27,7 @@ def load_weekly_report(path):
 
 def save_weekly_report(path, data):
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        safe_json_dump(data, path, indent=4)
     except Exception as e:
         logger.error(f"주간 보고서 저장 실패: {e}")
 

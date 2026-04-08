@@ -48,8 +48,8 @@ def save_threads(threads):
                     reverse=True
                 )
                 threads = {k: threads[k] for k in sorted_keys[:THREAD_MAX_SIZE]}
-            with open(THREAD_CACHE_FILE, "w", encoding="utf-8") as f:
-                json.dump(threads, f, ensure_ascii=False, indent=4)
+            from utils import safe_json_dump
+            safe_json_dump(threads, THREAD_CACHE_FILE, indent=4)
         except Exception as e:
             logger.error(f"장부 저장 실패: {e}")
 

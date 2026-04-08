@@ -3,6 +3,7 @@ import os
 import datetime
 import threading
 from config import USER_NOTES_FILE, USER_NOTES_BACKUP_FILE, logger
+from utils import safe_json_dump
 
 os.makedirs(os.path.dirname(USER_NOTES_FILE), exist_ok=True)
 if not os.path.exists(USER_NOTES_FILE):
@@ -41,8 +42,7 @@ def _save_notes(notes):
             # [V12.30] 부장님의 정밀 진단을 위해 절대 경로를 로그에 명시합니다.
             abs_path = os.path.abspath(USER_NOTES_FILE)
             
-            with open(USER_NOTES_FILE, 'w', encoding='utf-8') as f:
-                json.dump(notes, f, ensure_ascii=False, indent=2)
+            safe_json_dump(notes, USER_NOTES_FILE, indent=2)
             
             # [V12.30] 파일 저장에 성공했을 때만 메모리 캐시를 최신화합니다. (Sync Consistency)
             _NOTES_CACHE = notes
@@ -68,8 +68,7 @@ def _save_backup_note(note):
             return
             
         backup_data.append(note)
-        with open(USER_NOTES_BACKUP_FILE, 'w', encoding='utf-8') as f:
-            json.dump(backup_data, f, ensure_ascii=False, indent=2)
+        safe_json_dump(backup_data, USER_NOTES_BACKUP_FILE, indent=2)
         logger.info(f"📁 메모 백업 성공 [ID:{note.get('id')}]")
     except Exception as e:
         logger.error(f"🚨 메모 백업 중 오류: {e}")

@@ -6,6 +6,7 @@ import pytz
 import sys
 from telegram.ext import Application
 from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, USER_TIMEZONE, REPORTS_DIR, BASE_DIR
+from utils import safe_json_dump
 
 # 앞서 우리가 정성껏 만든 주요 도구들을 하나의 커다란 공장 상자로 불러옵니다!
 from mail_parser import fetch_recent_emails, save_processed_uid
@@ -58,8 +59,7 @@ async def handle_scheduled_reports(application: Application):
                 
                 # 토큰 보고 완료 기록
                 last_log["token_report"] = today_str
-                with open(LAST_REPORT_LOG, "w") as f:
-                    json.dump(last_log, f)
+                safe_json_dump(last_log, LAST_REPORT_LOG)
             return
 
         # --- [2] 오전 6시 0분: 비즈니스 업무 보고서 ---
@@ -80,8 +80,7 @@ async def handle_scheduled_reports(application: Application):
             last_log["business_report"] = today_str
             last_log["date"] = today_str 
             os.makedirs(os.path.dirname(LAST_REPORT_LOG), exist_ok=True)
-            with open(LAST_REPORT_LOG, "w") as f:
-                json.dump(last_log, f)
+            safe_json_dump(last_log, LAST_REPORT_LOG)
 
     except Exception as e:
         logger.error(f"스케줄 보고서 트리거 중 오류: {e}")

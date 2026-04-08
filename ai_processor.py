@@ -103,12 +103,17 @@ def _get_now_info():
 
 def _clean_ai_json(text):
     """AI 응답에서 불필요한 마크다운 기호(```json 등)를 제거하고 순수 JSON만 추출"""
-    if not text: return ""
     # 1. ```json 또는 ``` 문구를 제거합니다. (대소문자 무관)
     cleaned = re.sub(r'```(?:json)?\n?|```', '', text, flags=re.IGNORECASE).strip()
-    # 2. JSON 시작({)과 끝(}) 사이의 내용만 남깁니다. (찌꺼기 텍스트 방어)
-    json_match = re.search(r'(\{.*\})', cleaned, re.DOTALL)
-    return json_match.group(1) if json_match else cleaned
+    
+    # [V33.0 QC] 지능형 도려내기: AI가 앞에 인사말(Echoing)이나 뒤에 사족을 붙여도 무시하고 '{' ~ '}' 알맹이만 가져옵니다.
+    start_index = cleaned.find('{')
+    end_index = cleaned.rfind('}')
+    
+    if start_index != -1 and end_index != -1 and end_index > start_index:
+        return cleaned[start_index:end_index+1]
+    
+    return cleaned
 
 def _log_ai_xray(task, system_instruction, contents, response_text=None):
     """
@@ -139,10 +144,9 @@ def _log_ai_xray(task, system_instruction, contents, response_text=None):
     except Exception as de:
         logger.error(f"X-레이 통합 디버깅 기록 중 오류: {de}")
 
-def _execute_ai_call_with_retry(task_id, system_instr, user_content, config=None, max_attempts=4, wait_times=[5, 15, 30], is_json=False, safety_off=False):
+def _execute_ai_call_with_retry(task_id, system_instr, user_content, config=None, max_attempts=4, wait_times=[5, 15, 30], is_json=False):
     """
-    [V29.0] 부장님의 특명을 받은 '통합 공통지원팀' 전담 엔진입니다.
-    심부름 출발부터 기록, 비용 정산, 재시도까지 모든 공통 업무를 완벽히 대행합니다.
+    [V32.0 QC] 통합 공통지원팀 엔진: 심부름, 기록, 비용 정산, 재시도 및 지침서 누락 방지 로직 통합.
     """
     attempt = 1
     while attempt <= max_attempts:
@@ -152,14 +156,19 @@ def _execute_ai_call_with_retry(task_id, system_instr, user_content, config=None
                 logger.error(f"[{task_id}] AI 클라이언트 확보 실패")
                 return None
 
-            # [V29.0] 보안/안전 설정 지능형 조절 (기계적 번역 등 대응)
-            if safety_off and config:
-                config.safety_settings = [
-                    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
-                    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-                ]
+            # [V33.0] config 초기화 및 지침서 누락 원천 차단
+            if config is None:
+                config = types.GenerateContentConfig()
+            
+            # [🔥 핵심 수정] config가 있어도 system_instruction이 없으면 반드시 주입합니다. (요약 미표시 버그 수정)
+            if not config.system_instruction:
+                config.system_instruction = system_instr
+            
+            # 출력 상한선 및 기본 설정 보강
+            if not config.max_output_tokens:
+                config.max_output_tokens = 1000
+            if is_json and not config.response_mime_type:
+                config.response_mime_type = "application/json"
 
             # 1. 출발 기록 (X-Ray Request)
             _log_ai_xray(task_id, system_instr, user_content)
@@ -168,7 +177,7 @@ def _execute_ai_call_with_retry(task_id, system_instr, user_content, config=None
             response = client.models.generate_content(
                 model=AI_MODEL,
                 contents=user_content,
-                config=config or types.GenerateContentConfig(system_instruction=system_instr)
+                config=config
             )
 
             # 3. 도착 기록 (X-Ray Response)
@@ -186,9 +195,15 @@ def _execute_ai_call_with_retry(task_id, system_instr, user_content, config=None
                     response_text=resp_text
                 )
 
-            # 5. 결과 반환 (JSON 요청 시 자동 세탁 및 파싱)
+            # 5. [V33.0 QC] 결과 반환 (JSON 요청 시 자동 세탁 및 전용 파싱 방어 장치)
             if is_json:
-                return json.loads(_clean_ai_json(resp_text))
+                cleaned_json = _clean_ai_json(resp_text)
+                try:
+                    return json.loads(cleaned_json)
+                except json.JSONDecodeError as je:
+                    logger.error(f"[{task_id}] AI가 부적절한 JSON 형식을 반환했습니다. (위치: {je.lineno}행 {je.colno}열)")
+                    _log_ai_xray(f"{task_id}_ERROR", system_instr, user_content, response_text=f"[CLEANED_JSON_ERR]\n{cleaned_json}\n\n[ORIGINAL]\n{resp_text}")
+                    raise je
             return resp_text.strip()
 
         except Exception as e:
@@ -375,13 +390,12 @@ def translate_news_title(vi_title: str) -> str:
     )
     user_content = f"대상 문장: {vi_title}"
     
-    # [V29.0] 공통지원팀 지원 요청 (번역 업무는 안전장치 해제 모드로 수행)
+    # [V29.0] 공통지원팀 엔진
     translated = _execute_ai_call_with_retry(
         task_id="News_Title_Translation",
         system_instr=system_instr,
         user_content=user_content,
-        config=types.GenerateContentConfig(), # safety_off가 설정을 채워줌
-        safety_off=True
+        config=types.GenerateContentConfig()
     )
     return (translated or vi_title).strip()
 

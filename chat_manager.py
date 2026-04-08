@@ -3,6 +3,7 @@ import os
 import datetime
 import threading
 from config import CHAT_HISTORY_FILE, logger
+from utils import safe_json_dump
 
 # 처음 이 모듈이 불려올 때, 장기 기억 장부(JSON)가 없으면 즉시 신설합니다.
 os.makedirs(os.path.dirname(CHAT_HISTORY_FILE), exist_ok=True)
@@ -56,8 +57,7 @@ def save_chat_log(role: str, content: str):
             logs.append(new_entry)
             
             # 3. 메모리와 파일(창고) 실시간 동기화
-            with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
-                json.dump(logs, f, ensure_ascii=False, indent=2)
+            safe_json_dump(logs, CHAT_HISTORY_FILE, indent=2)
                 
         except Exception as e:
             logger.error(f"🚨 대화 기록부 동기화 중 오류 발생: {e}")
@@ -139,8 +139,7 @@ def clear_chat_history() -> bool:
     global _CHAT_LOGS_CACHE
     try:
         with _CHAT_LOCK:
-            with open(CHAT_HISTORY_FILE, 'w', encoding='utf-8') as f:
-                json.dump([], f)
+            safe_json_dump([], CHAT_HISTORY_FILE)
             _CHAT_LOGS_CACHE = []  # 메모리 캐시도 즉시 비움
         logger.info("대화 장부 초기화 및 캐시 리로드 완료.")
         return True

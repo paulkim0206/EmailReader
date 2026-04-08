@@ -2,6 +2,7 @@ import json
 import os
 import threading
 from config import USER_PREFERENCES_FILE, USER_CORRECTIONS_FILE, logger
+from utils import safe_json_dump
 
 # [V12.13] 인메모리 싱글톤 캐시: AI의 학습 내용을 메모리에 상주시킵니다.
 _PREFERENCES_CACHE = None
@@ -36,8 +37,7 @@ def save_preferences(pref_list):
     with _PREF_LOCK:
         _PREFERENCES_CACHE = pref_list
         try:
-            with open(USER_PREFERENCES_FILE, "w", encoding="utf-8") as f:
-                json.dump(pref_list, f, ensure_ascii=False, indent=4)
+            safe_json_dump(pref_list, USER_PREFERENCES_FILE, indent=4)
         except Exception as e:
             logger.error(f"스킵 학습 노트를 디스크에 적는데 실패했습니다: {e}")
 
@@ -104,8 +104,7 @@ def save_corrections(corr_list):
     with _CORR_LOCK:
         _CORRECTIONS_CACHE = corr_list
         try:
-            with open(USER_CORRECTIONS_FILE, "w", encoding="utf-8") as f:
-                json.dump(corr_list, f, ensure_ascii=False, indent=4)
+            safe_json_dump(corr_list, USER_CORRECTIONS_FILE, indent=4)
         except Exception as e:
             logger.error(f"오답 노트를 디스크에 적는데 실패했습니다: {e}")
 

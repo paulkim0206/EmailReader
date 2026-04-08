@@ -3,6 +3,7 @@ import os
 import datetime
 import threading
 from config import RETRY_QUEUE_FILE, RETRY_WAIT_MINUTES, logger
+from utils import safe_json_dump
 
 
 # [V12.13] 인메모리 싱글톤 캐시: 재시도 대기열을 메모리에 상주시킵니다.
@@ -29,14 +30,16 @@ def load_retry_queue():
         return _QUEUE_CACHE
 
 def save_retry_queue(queue):
-    """대기열의 변경사항을 메모리에 반영하고 SSD에 실시간 동기화합니다."""
+    """
+    대기열의 변경사항을 메모리에 반영하고 SSD에 실시간 동기화합니다.
+    [V33.0 QC] 원자적 저장(Atomic Write) 도입: 임시 파일에 먼저 쓰고 교체하여 갑작스러운 종료 시에도 장부 파손을 방지합니다.
+    """
     global _QUEUE_CACHE
     
     with _QUEUE_LOCK:
         _QUEUE_CACHE = queue
         try:
-            with open(RETRY_QUEUE_FILE, "w", encoding="utf-8") as f:
-                json.dump(queue, f, ensure_ascii=False, indent=4)
+            safe_json_dump(queue, RETRY_QUEUE_FILE, indent=4)
         except Exception as e:
             logger.error(f"재시도 대기열 저장 실패: {e}")
 

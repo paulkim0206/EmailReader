@@ -10,7 +10,8 @@ import json
 import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove, BotCommand
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, CommandHandler, MessageHandler, filters
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, TIMEZONE_FILE, USER_TIMEZONE
+from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, logger, TIMEZONE_FILE, USER_TIMEZONE, RSS_URL_MAP_FILE
+from utils import safe_json_dump
 
 # 전 세계의 모든 사용자 중, 오직 '나(등록된 소유자)'에게만 알림을 보내고 명령을 받기 위한 검증용 정보입니다.
 # 만약 누군가 내 비서 봇에 몰래 말을 걸어도 ID가 다르면 가차 없이 무시합니다. (보안 철저)
@@ -171,7 +172,6 @@ RSS_URL_MAP = {}
 def load_rss_url_map():
     """서버 재시작 후에도 뉴스 버튼이 작동하도록 장부에서 링크 정보를 불러옵니다."""
     global RSS_URL_MAP
-    from config import RSS_URL_MAP_FILE
     if os.path.exists(RSS_URL_MAP_FILE):
         try:
             with open(RSS_URL_MAP_FILE, "r", encoding="utf-8") as f:
@@ -183,7 +183,6 @@ def load_rss_url_map():
 
 def save_rss_url_map():
     """뉴스 링크 정보를 장부에 영구 저장합니다."""
-    from config import RSS_URL_MAP_FILE
     try:
         # [V17.4] 데이터 다이어트: 너무 오래된 링크(1000건 초과)는 삭제하여 파일 크기 관리
         global RSS_URL_MAP
@@ -192,8 +191,7 @@ def save_rss_url_map():
             keys_to_remove = list(RSS_URL_MAP.keys())[:200]
             for k in keys_to_remove: del RSS_URL_MAP[k]
             
-        with open(RSS_URL_MAP_FILE, "w", encoding="utf-8") as f:
-            json.dump(RSS_URL_MAP, f, ensure_ascii=False, indent=2)
+        safe_json_dump(RSS_URL_MAP, RSS_URL_MAP_FILE, indent=2)
     except Exception as e:
         logger.error(f"뉴스 장부 저장 실패: {e}")
 
@@ -239,7 +237,7 @@ async def send_rss_alert(application, item):
             parse_mode="HTML",
             reply_markup=reply_markup
         )
-        logger.info(f"뉴스 속보 알림 전송 완료: {title}")
+        logger.info(f"뉴스 속보 알림 전송 완료: {title_vi}")
     except Exception as e:
         logger.error(f"뉴스 알림 전송 실패: {e}")
 
@@ -311,8 +309,6 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
     사용자의 명백한 클릭 명령 없이는 어떤 문서 파일도 제멋대로 생성하지 못하도록 통과 지점을 만든 방어벽입니다.
     """
     query = update.callback_query
-
-    # 버튼 뒤에 숨겨두었던 암호문 (예: 'save_10번편지')을 가져옵니다.
 
     # 버튼 뒤에 숨겨두었던 암호문 (예: 'save_10번편지')을 가져옵니다.
     data = query.data
@@ -501,62 +497,6 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         await query.answer(text="🫡 부장님의 의견을 기다리고 있습니다.")
         return
 
-        # [V12.20] 체감 속도 최적화: 클릭 즉시 버튼을 가려 부장님께 즉각적인 반응을 보여줍니다.
-        try: await query.edit_message_reply_markup(reply_markup=None)
-        except Exception: pass
-
-        from thread_manager import find_entry_by_uid
-        from feedback_manager import add_learning_preference
-        from ai_processor import extract_skip_rule_ai
-        
-        # 0. [V12.19] 즉시 응답: 텔레그램 버튼의 '글썽임(로딩)'을 0.1초 만에 멈추게 합니다.
-        await query.answer(text="⏳ 부장님의 의도를 분석하여 학습 중입니다... 잠시만 기다려 주세요! 🫡")
-
-        # 1. 장부 또는 캐시에서 제목, 본문, 요약을 확보합니다.
-        info = find_entry_by_uid(uid)
-        subject = None
-        summary = None
-        body = ""
-        
-        cache_data = temp_mail_cache.get(uid)
-        if cache_data:
-            subject = cache_data["mail"].get("subject")
-            body = cache_data["mail"].get("body", "")
-            
-        if info:
-            subject = subject or info.get("thread_key")
-            summary = info.get("summary")
-        
-        if not body and uid:
-            # 캐시에 없으면 서버에서 가져옵니다 (V12.12 실시간 복구)
-            from mail_parser import fetch_parsed_mail
-            mail_data = await asyncio.to_thread(fetch_parsed_mail, uid)
-            if mail_data:
-                subject = subject or mail_data.get("subject")
-                body = mail_data.get("body", "")
-
-        if subject:
-            # [V12.19] AI를 사용하여 왜 제외했는지 '의도(Rule)'를 추출합니다.
-            reason = await asyncio.to_thread(extract_skip_rule_ai, subject, body)
-            
-            success, msg = add_learning_preference(subject, summary or "요약 없음", reason)
-            
-            if success:
-                await context.bot.send_message(
-                    chat_id=query.message.chat_id,
-                    text=(
-                        f"🧠 <b>요약 제외 및 규칙 학습 완료!</b>\n\n"
-                        f"📝 <b>파악된 스킵 규칙:</b>\n<code>{escape_for_tg(reason)}</code>\n\n"
-                        f"앞으로 유사한 성격의 메일은 지능적으로 스킵하겠습니다. ✨"
-                    ),
-                    parse_mode="HTML"
-                )
-            else:
-                await context.bot.send_message(chat_id=query.message.chat_id, text=f"ℹ️ {msg}")
-        else:
-            await context.bot.send_message(chat_id=query.message.chat_id, text="⚠️ 정보를 찾을 수 없습니다.")
-        return
-
     # [새로운 분기 4] 부장님의 준엄한 명령: "그래도 요약해!"
     elif data.startswith("force_summary_"):
         uid = data.split("_")[2]
@@ -627,8 +567,7 @@ async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_T
         
         # 1. 설정 파일에 저장
         try:
-            with open(TIMEZONE_FILE, "w", encoding="utf-8") as f:
-                json.dump({"timezone": new_tz}, f, ensure_ascii=False, indent=4)
+            safe_json_dump({"timezone": new_tz}, TIMEZONE_FILE, indent=4)
             
             # 2. 현재 실행 중인 프로그램 설정 즉시 업데이트
             import config
@@ -684,13 +623,12 @@ async def handle_location_update(update: Update, context: ContextTypes.DEFAULT_T
         import re
         match = re.search(r'\{.*\}', ai_response, re.DOTALL)
         if match:
-            geo_info = pyjson.loads(match.group())
+            geo_info = json.loads(match.group())
             country = geo_info.get("country", "알 수 없는 나라")
             new_tz = geo_info.get("timezone", "UTC")
             
             # 1. 파일 저장
-            with open(TIMEZONE_FILE, "w", encoding="utf-8") as f:
-                pyjson.dump({"timezone": new_tz, "country": country}, f, ensure_ascii=False, indent=4)
+            safe_json_dump({"timezone": new_tz, "country": country}, TIMEZONE_FILE, indent=4)
             
             # 2. 즉시 반영
             import config
